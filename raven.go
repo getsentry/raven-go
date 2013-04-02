@@ -175,6 +175,7 @@ func (client *Client) SetTags(tags map[string]string) {
 
 func (client *Client) Send(packet *Packet) error {
 	client.mu.RLock()
+	packet.Init(client.tags)
 	req, _ := http.NewRequest("POST", client.url, bytes.NewReader(packet.JSON()))
 	req.Header.Set("X-Sentry-Auth", client.authHeader())
 	req.Header.Set("User-Agent", userAgent)
