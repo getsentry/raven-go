@@ -12,7 +12,7 @@ func trace() *raven.Stacktrace {
 }
 
 func main() {
-	client, err := raven.NewClient(os.Args[1])
+	client, err := raven.NewClient(os.Args[1], map[string]string{"foo": "bar"})
 	if err != nil {
 		log.Fatal(err)
 	}

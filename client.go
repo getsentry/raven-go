@@ -43,7 +43,7 @@ type Interface interface {
 }
 
 type Transport interface {
-	Send(*Client, *Packet) error
+	Send(url, authHeader string, packet *Packet) error
 }
 
 // http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
@@ -102,6 +102,15 @@ func (packet *Packet) Init(project string, parentTags map[string]string) error {
 	return nil
 }
 
+func randomID() (string, error) {
+	id := make([]byte, 16)
+	_, err := io.ReadFull(rand.Reader, id)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(id), nil
+}
+
 func (packet *Packet) JSON() []byte {
 	packetJSON, _ := json.Marshal(packet)
 
@@ -119,25 +128,20 @@ func (packet *Packet) JSON() []byte {
 	return packetJSON
 }
 
-func NewClient(dsn string) (*Client, error) {
-	client := &Client{transport: &HTTPTransport{}}
+func NewClient(dsn string, tags map[string]string) (*Client, error) {
+	client := &Client{Transport: &HTTPTransport{}, Tags: tags}
 	return client, client.SetDSN(dsn)
 }
 
 type Client struct {
-	mu sync.RWMutex
+	Tags map[string]string
 
-	url string
+	Transport Transport
 
-	publicKey string
-	secretKey string
-	projectID string
-
-	tags map[string]string
-
+	mu         sync.RWMutex
+	url        string
+	projectID  string
 	authHeader string
-
-	transport Transport
 }
 
 func (client *Client) SetDSN(dsn string) error {
@@ -156,9 +160,9 @@ func (client *Client) SetDSN(dsn string) error {
 	if uri.User == nil {
 		return errors.New("raven: dsn missing public key and/or private key")
 	}
-	client.publicKey = uri.User.Username()
-	var ok bool
-	if client.secretKey, ok = uri.User.Password(); !ok {
+	publicKey := uri.User.Username()
+	secretKey, ok := uri.User.Password()
+	if !ok {
 		return errors.New("raven: dsn missing private key")
 	}
 	uri.User = nil
@@ -173,66 +177,30 @@ func (client *Client) SetDSN(dsn string) error {
 
 	client.url = uri.String()
 
-	client.authHeader = fmt.Sprintf("Sentry sentry_version=3, sentry_key=%s, sentry_secret=%s", client.publicKey, client.secretKey)
+	client.authHeader = fmt.Sprintf("Sentry sentry_version=3, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
 
 	return nil
 }
 
-func (client *Client) SetTransport(t Transport) {
-	client.mu.Lock()
-	client.transport = t
-	client.mu.Unlock()
-}
-
-func (client *Client) SetTags(tags map[string]string) {
-	client.mu.Lock()
-	client.tags = tags
-	client.mu.Unlock()
-}
-
-func (client *Client) URL() string {
-	client.mu.RLock()
-	defer client.mu.RUnlock()
-	return client.url
-}
-
-func (client *Client) AuthHeader() string {
-	client.mu.RLock()
-	defer client.mu.RUnlock()
-	return client.authHeader
-}
-
-func (client *Client) ProjectID() string {
-	client.mu.RLock()
-	defer client.mu.RUnlock()
-	return client.projectID
-}
-
-func (client *Client) Tags() map[string]string {
-	client.mu.RLock()
-	defer client.mu.RUnlock()
-	return client.tags
-}
-
 func (client *Client) Send(packet *Packet) error {
 	client.mu.RLock()
-	t := client.transport
+	url, authHeader, projectID := client.url, client.authHeader, client.projectID
 	client.mu.RUnlock()
-	packet.Init(client.ProjectID(), client.Tags())
-	return t.Send(client, packet)
+
+	packet.Init(projectID, client.Tags)
+	return client.Transport.Send(url, authHeader, packet)
 }
 
 type HTTPTransport struct {
 	http http.Client
 }
 
-func (t *HTTPTransport) Send(client *Client, packet *Packet) error {
-	url := client.URL()
+func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	if url == "" {
 		return nil
 	}
 	req, _ := http.NewRequest("POST", url, bytes.NewReader(packet.JSON()))
-	req.Header.Set("X-Sentry-Auth", client.AuthHeader())
+	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
 	res, err := t.http.Do(req)
 	if err != nil {
@@ -244,13 +212,4 @@ func (t *HTTPTransport) Send(client *Client, packet *Packet) error {
 		return fmt.Errorf("raven: got http status %d", res.StatusCode)
 	}
 	return nil
-}
-
-func randomID() (string, error) {
-	id := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, id)
-	if err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(id), nil
 }

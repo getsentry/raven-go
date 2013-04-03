@@ -51,12 +51,6 @@ func TestSetDSN(t *testing.T) {
 	if client.url != "https://example.com/sentry/api/1/store/" {
 		t.Error("incorrect url:", client.url)
 	}
-	if client.publicKey != "u" {
-		t.Error("incorrect publicKey:", client.publicKey)
-	}
-	if client.secretKey != "p" {
-		t.Error("incorrect secretKey:", client.secretKey)
-	}
 	if client.projectID != "1" {
 		t.Error("incorrect projectID:", client.projectID)
 	}
