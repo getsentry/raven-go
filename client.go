@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -50,6 +49,7 @@ type Packet struct {
 
 	// Required, set automatically by Client.Send via Packet.Init if blank
 	EventID   string    `json:"event_id"`
+	Project   string    `json:"project"`
 	Timestamp Timestamp `json:"timestamp"`
 	Level     Severity  `json:"level"`
 
@@ -65,9 +65,12 @@ type Packet struct {
 	Interfaces []Interface `json:"-"`
 }
 
-func (packet *Packet) Init(parentTags map[string]string) error {
+func (packet *Packet) Init(project string, parentTags map[string]string) error {
 	if packet.Message == "" {
 		return errors.New("raven: empty message")
+	}
+	if packet.Project == "" {
+		packet.Project = project
 	}
 	if packet.EventID == "" {
 		var err error
@@ -128,7 +131,7 @@ type Client struct {
 
 	tags map[string]string
 
-	authHeaderCache string
+	authHeader string
 
 	http http.Client
 }
@@ -162,7 +165,7 @@ func (client *Client) SetDSN(dsn string) error {
 
 	client.url = uri.String()
 
-	client.authHeaderCache = fmt.Sprintf("Sentry sentry_version=2.0, sentry_key=%s, sentry_secret=%s, sentry_timestamp=", client.publicKey, client.secretKey)
+	client.authHeader = fmt.Sprintf("Sentry sentry_version=3, sentry_key=%s, sentry_secret=%s", client.publicKey, client.secretKey)
 
 	return nil
 }
@@ -175,9 +178,9 @@ func (client *Client) SetTags(tags map[string]string) {
 
 func (client *Client) Send(packet *Packet) error {
 	client.mu.RLock()
-	packet.Init(client.tags)
+	packet.Init(client.projectID, client.tags)
 	req, _ := http.NewRequest("POST", client.url, bytes.NewReader(packet.JSON()))
-	req.Header.Set("X-Sentry-Auth", client.authHeader())
+	req.Header.Set("X-Sentry-Auth", client.authHeader)
 	req.Header.Set("User-Agent", userAgent)
 	client.mu.RUnlock()
 	res, err := client.http.Do(req)
@@ -190,10 +193,6 @@ func (client *Client) Send(packet *Packet) error {
 		return fmt.Errorf("raven: got http status %d", res.StatusCode)
 	}
 	return nil
-}
-
-func (client *Client) authHeader() string {
-	return client.authHeaderCache + strconv.FormatInt(time.Now().Unix(), 10)
 }
 
 func randomID() (string, error) {
