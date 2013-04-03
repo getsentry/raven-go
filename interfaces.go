@@ -38,24 +38,6 @@ type Template struct {
 
 func (t *Template) Class() string { return "sentry.interfaces.Template" }
 
-// http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Http
-type Http struct {
-	// Required
-	URL    string `json:"url"`
-	Method string `json:"method"`
-	Query  string `json:"query_string,omitempty"`
-
-	// Optional
-	Cookies string            `json:"cookies,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Env     map[string]string `json:"env,omitempty"`
-
-	// Must be either a string or map[string]string
-	Data interface{} `json:"data,omitempty"`
-}
-
-func (h *Http) Class() string { return "sentry.interfaces.Http" }
-
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.User
 type User struct {
 	ID       string `json:"id"`
