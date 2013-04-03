@@ -69,6 +69,10 @@ func TestStacktrace(t *testing.T) {
 	if !*f.InApp {
 		t.Error("expected InApp to be true")
 	}
+
+	if st.Culprit() != "github.com/cupcake/raven-go.trace" {
+		t.Error("incorrect Culprit:", st.Culprit())
+	}
 }
 
 // a

@@ -42,6 +42,10 @@ type Interface interface {
 	Class() string
 }
 
+type Culpriter interface {
+	Culprit() string
+}
+
 type Transport interface {
 	Send(url, authHeader string, packet *Packet) error
 }
@@ -98,6 +102,17 @@ func (packet *Packet) Init(project string, parentTags map[string]string) error {
 		tags[k] = v
 	}
 	packet.Tags = tags
+
+	if packet.Culprit == "" {
+		for _, inter := range packet.Interfaces {
+			if c, ok := inter.(Culpriter); ok {
+				packet.Culprit = c.Culprit()
+				if packet.Culprit != "" {
+					break
+				}
+			}
+		}
+	}
 
 	return nil
 }

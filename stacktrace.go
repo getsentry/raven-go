@@ -22,6 +22,13 @@ type Stacktrace struct {
 
 func (s *Stacktrace) Class() string { return "sentry.interfaces.Stacktrace" }
 
+func (s *Stacktrace) Culprit() string {
+	if len(s.Frames) > 0 && s.Frames[0].Module != "" && s.Frames[0].Function != "" {
+		return s.Frames[0].Module + "." + s.Frames[0].Function
+	}
+	return ""
+}
+
 type StacktraceFrame struct {
 	// At least one required
 	Filename string `json:"filename,omitempty"`

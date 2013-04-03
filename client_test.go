@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+type testInterface struct{}
+
+func (t *testInterface) Class() string   { return "sentry.interfaces.Test" }
+func (t *testInterface) Culprit() string { return "codez" }
+
 func TestPacketJSON(t *testing.T) {
 	packet := &Packet{
 		Project:    "1",
@@ -24,11 +29,14 @@ func TestPacketJSON(t *testing.T) {
 }
 
 func TestPacketInit(t *testing.T) {
-	packet := &Packet{Message: "a", Tags: map[string]string{"foo": "bar"}}
+	packet := &Packet{Message: "a", Tags: map[string]string{"foo": "bar"}, Interfaces: []Interface{&testInterface{}}}
 	packet.Init("foo", map[string]string{"foo": "foo", "baz": "buzz"})
 
 	if packet.Project != "foo" {
 		t.Error("incorrect Project:", packet.Project)
+	}
+	if packet.Culprit != "codez" {
+		t.Error("incorrect Culprit:", packet.Culprit)
 	}
 	if packet.Level != ERROR {
 		t.Errorf("incorrect Level: got %d, want %d", packet.Level, ERROR)
