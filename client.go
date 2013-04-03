@@ -216,9 +216,10 @@ func (client *Client) Tags() map[string]string {
 
 func (client *Client) Send(packet *Packet) error {
 	client.mu.RLock()
-	defer client.mu.RUnlock()
+	t := client.transport
+	client.mu.RUnlock()
 	packet.Init(client.ProjectID(), client.Tags())
-	return client.transport.Send(client, packet)
+	return t.Send(client, packet)
 }
 
 type HTTPTransport struct {
