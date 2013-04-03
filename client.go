@@ -2,7 +2,9 @@ package raven
 
 import (
 	"bytes"
+	"compress/zlib"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -218,9 +220,12 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	if url == "" {
 		return nil
 	}
-	req, _ := http.NewRequest("POST", url, bytes.NewReader(packet.JSON()))
+
+	body, contentType := serializedPacket(packet)
+	req, _ := http.NewRequest("POST", url, body)
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Content-Type", contentType)
 	res, err := t.http.Do(req)
 	if err != nil {
 		return err
@@ -231,6 +236,23 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 		return fmt.Errorf("raven: got http status %d", res.StatusCode)
 	}
 	return nil
+}
+
+func serializedPacket(packet *Packet) (r io.Reader, contentType string) {
+	packetJSON := packet.JSON()
+
+	// Only deflate/base64 the packet if it is bigger than 1KB, as there is
+	// overhead.
+	if len(packetJSON) > 1000 {
+		buf := &bytes.Buffer{}
+		b64 := base64.NewEncoder(base64.StdEncoding, buf)
+		deflate, _ := zlib.NewWriterLevel(b64, zlib.BestCompression)
+		deflate.Write(packetJSON)
+		deflate.Close()
+		b64.Close()
+		return buf, "application/octet-stream"
+	}
+	return bytes.NewReader(packetJSON), "application/json"
 }
 
 var hostname string
