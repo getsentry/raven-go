@@ -145,7 +145,11 @@ func trimPath(filename string) string {
 		if prefix[len(prefix)-1] != '/' {
 			prefix += "/"
 		}
-		trimmed := strings.TrimPrefix(filename, prefix)
+		trimmed := filename
+		// TODO: Use strings.TrimPrefix when Go 1.1 has been released
+		if strings.HasPrefix(filename, prefix) {
+			trimmed = filename[len(prefix):]
+		}
 		if len(trimmed) < len(filename) {
 			return trimmed
 		}
