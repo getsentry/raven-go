@@ -38,6 +38,9 @@ func TestPacketInit(t *testing.T) {
 	if packet.Culprit != "codez" {
 		t.Error("incorrect Culprit:", packet.Culprit)
 	}
+	if packet.ServerName == "" {
+		t.Errorf("ServerName should not be empty")
+	}
 	if packet.Level != ERROR {
 		t.Errorf("incorrect Level: got %d, want %d", packet.Level, ERROR)
 	}

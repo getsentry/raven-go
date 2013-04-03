@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -92,6 +93,9 @@ func (packet *Packet) Init(project string, parentTags map[string]string) error {
 	}
 	if packet.Level == 0 {
 		packet.Level = ERROR
+	}
+	if packet.ServerName == "" {
+		packet.ServerName = hostname
 	}
 
 	tags := make(map[string]string)
@@ -227,4 +231,10 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 		return fmt.Errorf("raven: got http status %d", res.StatusCode)
 	}
 	return nil
+}
+
+var hostname string
+
+func init() {
+	hostname, _ = os.Hostname()
 }
