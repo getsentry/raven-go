@@ -11,6 +11,18 @@ type Message struct {
 
 func (m *Message) Class() string { return "sentry.interfaces.Message" }
 
+// http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Exception
+type Exception struct {
+	// Required
+	Value string `json:"value"`
+
+	// Optional
+	Type   string `json:"type"`
+	Module string `json:"module"`
+}
+
+func (m *Exception) Class() string { return "sentry.interfaces.Exception" }
+
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Stacktrace
 type Stacktrace struct {
 	// Required
