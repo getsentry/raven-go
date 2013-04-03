@@ -131,6 +131,9 @@ func fileContext(filename string, line int, count int) [][]byte {
 	}
 	line-- // stack trace lines are 1-indexed
 	end := line + count
+	if line >= len(lines) {
+		return nil
+	}
 	if end > len(lines) {
 		end = len(lines)
 	}
