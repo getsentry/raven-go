@@ -42,6 +42,10 @@ type Interface interface {
 	Class() string
 }
 
+type Transport interface {
+	Send(*Client, *Packet) error
+}
+
 // http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
 type Packet struct {
 	// Required
@@ -116,7 +120,7 @@ func (packet *Packet) JSON() []byte {
 }
 
 func NewClient(dsn string) (*Client, error) {
-	client := &Client{}
+	client := &Client{transport: &HTTPTransport{}}
 	return client, client.SetDSN(dsn)
 }
 
@@ -133,7 +137,7 @@ type Client struct {
 
 	authHeader string
 
-	http http.Client
+	transport Transport
 }
 
 func (client *Client) SetDSN(dsn string) error {
@@ -174,23 +178,62 @@ func (client *Client) SetDSN(dsn string) error {
 	return nil
 }
 
+func (client *Client) SetTransport(t Transport) {
+	client.mu.Lock()
+	client.transport = t
+	client.mu.Unlock()
+}
+
 func (client *Client) SetTags(tags map[string]string) {
 	client.mu.Lock()
 	client.tags = tags
 	client.mu.Unlock()
 }
 
+func (client *Client) URL() string {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+	return client.url
+}
+
+func (client *Client) AuthHeader() string {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+	return client.authHeader
+}
+
+func (client *Client) ProjectID() string {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+	return client.projectID
+}
+
+func (client *Client) Tags() map[string]string {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+	return client.tags
+}
+
 func (client *Client) Send(packet *Packet) error {
-	if client.url == "" {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+	packet.Init(client.ProjectID(), client.Tags())
+	return client.transport.Send(client, packet)
+}
+
+type HTTPTransport struct {
+	http http.Client
+}
+
+func (t *HTTPTransport) Send(client *Client, packet *Packet) error {
+	url := client.URL()
+	if url == "" {
 		return nil
 	}
-	client.mu.RLock()
-	packet.Init(client.projectID, client.tags)
-	req, _ := http.NewRequest("POST", client.url, bytes.NewReader(packet.JSON()))
-	req.Header.Set("X-Sentry-Auth", client.authHeader)
+	req, _ := http.NewRequest("POST", url, bytes.NewReader(packet.JSON()))
+	req.Header.Set("X-Sentry-Auth", client.AuthHeader())
 	req.Header.Set("User-Agent", userAgent)
-	client.mu.RUnlock()
-	res, err := client.http.Do(req)
+	res, err := t.http.Do(req)
 	if err != nil {
 		return err
 	}
