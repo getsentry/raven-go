@@ -137,6 +137,10 @@ type Client struct {
 }
 
 func (client *Client) SetDSN(dsn string) error {
+	if dsn == "" {
+		return nil
+	}
+
 	client.mu.Lock()
 	defer client.mu.Unlock()
 
@@ -177,6 +181,9 @@ func (client *Client) SetTags(tags map[string]string) {
 }
 
 func (client *Client) Send(packet *Packet) error {
+	if client.url == "" {
+		return nil
+	}
 	client.mu.RLock()
 	packet.Init(client.projectID, client.tags)
 	req, _ := http.NewRequest("POST", client.url, bytes.NewReader(packet.JSON()))
