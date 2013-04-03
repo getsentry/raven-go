@@ -23,30 +23,6 @@ type Exception struct {
 
 func (m *Exception) Class() string { return "sentry.interfaces.Exception" }
 
-// http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Stacktrace
-type Stacktrace struct {
-	// Required
-	Frames []StacktraceFrame `json:"frames"`
-}
-
-func (s *Stacktrace) Class() string { return "sentry.interfaces.Stacktrace" }
-
-type StacktraceFrame struct {
-	// At least one required
-	Filename     string   `json:"filename,omitempty"`
-	Function     string   `json:"function,omitempty"`
-	Module       string   `json:"module,omitempty"`
-
-	// Optional
-	Lineno       int      `json:"lineno,omitempty"`
-	Colno        int      `json:"colno,omitempty"`
-	AbsolutePath string   `json:"abs_path,omitempty"`
-	ContextLine  string   `json:"context_line,omitempty"`
-	PreContext   []string `json:"pre_context,omitempty"`
-	PostContext  []string `json:"post_context,omitempty"`
-	InApp        *bool    `json:"in_app,omitempty"`
-}
-
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Template
 type Template struct {
 	// Required
