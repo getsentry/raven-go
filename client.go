@@ -225,6 +225,9 @@ func (client *Client) worker() {
 }
 
 func (client *Client) Report(packet *Packet) {
+	if client == nil {
+		return
+	}
 	select {
 	case client.queue <- packet:
 	default:
@@ -240,6 +243,9 @@ func (client *Client) Close() {
 }
 
 func (client *Client) Send(packet *Packet) error {
+	if client == nil {
+		return nil
+	}
 	client.mu.RLock()
 	url, authHeader, projectID := client.url, client.authHeader, client.projectID
 	client.mu.RUnlock()
