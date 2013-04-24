@@ -42,7 +42,14 @@ func NewException(err error, stacktrace *Stacktrace) *Exception {
 	return ex
 }
 
-func (m *Exception) Class() string { return "sentry.interfaces.Exception" }
+func (e *Exception) Class() string { return "sentry.interfaces.Exception" }
+
+func (e *Exception) Culprit() string {
+	if e.Stacktrace == nil {
+		return ""
+	}
+	return e.Stacktrace.Culprit()
+}
 
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Template
 type Template struct {
