@@ -149,20 +149,28 @@ func (packet *Packet) JSON() []byte {
 	return packetJSON
 }
 
+// The maximum number of packets that will be buffered waiting to be delivered.
+// Packets will be dropped if the buffer is full.
+var MaxQueueBuffer = 100
+
 func NewClient(dsn string, tags map[string]string) (*Client, error) {
-	client := &Client{Transport: &HTTPTransport{}, Tags: tags}
+	client := &Client{Transport: &HTTPTransport{}, Tags: tags, queue: make(chan *Packet, MaxQueueBuffer)}
+	go client.worker()
 	return client, client.SetDSN(dsn)
 }
 
 type Client struct {
 	Tags map[string]string
 
-	Transport Transport
+	Transport    Transport
+	ErrorHandler func(*Packet, error)
+	DropHandler  func(*Packet)
 
 	mu         sync.RWMutex
 	url        string
 	projectID  string
 	authHeader string
+	queue      chan *Packet
 }
 
 func (client *Client) SetDSN(dsn string) error {
@@ -201,6 +209,30 @@ func (client *Client) SetDSN(dsn string) error {
 	client.authHeader = fmt.Sprintf("Sentry sentry_version=3, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
 
 	return nil
+}
+
+func (client *Client) worker() {
+	for packet := range client.queue {
+		err := client.Send(packet)
+		if err != nil && client.ErrorHandler != nil {
+			client.ErrorHandler(packet, err)
+		}
+	}
+}
+
+func (client *Client) Report(packet *Packet) {
+	select {
+	case client.queue <- packet:
+	default:
+		// send would block, drop the packet
+		if client.DropHandler != nil {
+			client.DropHandler(packet)
+		}
+	}
+}
+
+func (client *Client) Close() {
+	close(client.queue)
 }
 
 func (client *Client) Send(packet *Packet) error {
