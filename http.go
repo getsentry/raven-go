@@ -8,14 +8,15 @@ import (
 func NewHttp(req *http.Request) *Http {
 	// TODO: sanitization
 	// TODO: detect http vs https
-	addr := strings.Split(req.RemoteAddr, ":")
 	h := &Http{
 		Method:  req.Method,
 		Cookies: req.Header.Get("Cookie"),
 		Query:   req.URL.RawQuery,
 		URL:     "http://" + req.Host + req.URL.Path,
-		Env:     map[string]string{"REMOTE_ADDR": addr[0], "REMOTE_PORT": addr[1]},
 		Headers: make(map[string]string),
+	}
+	if addr := strings.SplitN(req.RemoteAddr, ":", 2); len(addr) == 2 {
+		h.Env = map[string]string{"REMOTE_ADDR": addr[0], "REMOTE_PORT": addr[1]}
 	}
 	for k, v := range req.Header {
 		h.Headers[k] = strings.Join(v, "; ")
