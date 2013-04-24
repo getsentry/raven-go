@@ -76,6 +76,10 @@ type Packet struct {
 	Interfaces []Interface `json:"-"`
 }
 
+func NewPacket(message string, interfaces ...Interface) *Packet {
+	return &Packet{Message: message, Interfaces: interfaces}
+}
+
 func (packet *Packet) Init(project string, parentTags map[string]string) error {
 	if packet.Message == "" {
 		return errors.New("raven: empty message")
