@@ -15,7 +15,7 @@ var newExceptionTests = []struct {
 
 func TestNewException(t *testing.T) {
 	for _, test := range newExceptionTests {
-		actual := NewException(test.err, nil)
+		actual := NewException(test.err)
 		if actual.Value != test.Value {
 			t.Errorf("incorrect Value: got %s, want %s", actual.Value, test.Value)
 		}
