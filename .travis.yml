@@ -1,6 +1,1 @@
 language: go
-install:
-  - mkdir -p $GOPATH/src/github.com
-  - mv $HOME/build/cupcake $GOPATH/src/github.com/
-  - cd $GOPATH/src/github.com/cupcake/raven-go
-  - go get -d -v ./... && go build -v ./...
