@@ -1,3 +1,4 @@
+// Package raven implements a client for the Sentry error logging service.
 package raven
 
 import (
@@ -58,7 +59,7 @@ type Packet struct {
 	// Required
 	Message string `json:"message"`
 
-	// Required, set automatically by Client.Send via Packet.Init if blank
+	// Required, set automatically by Client.Send/Report via Packet.Init if blank
 	EventID   string    `json:"event_id"`
 	Project   string    `json:"project"`
 	Timestamp Timestamp `json:"timestamp"`
@@ -76,10 +77,13 @@ type Packet struct {
 	Interfaces []Interface `json:"-"`
 }
 
+// NewPacket constructs a packet with the specified message and interfaces.
 func NewPacket(message string, interfaces ...Interface) *Packet {
 	return &Packet{Message: message, Interfaces: interfaces}
 }
 
+// Init initializes required fields in a packet. It is typically called by
+// Client.Send/Report automatically.
 func (packet *Packet) Init(project string, parentTags map[string]string) error {
 	if packet.Message == "" {
 		return errors.New("raven: empty message")
@@ -154,21 +158,29 @@ func (packet *Packet) JSON() []byte {
 }
 
 // The maximum number of packets that will be buffered waiting to be delivered.
-// Packets will be dropped if the buffer is full.
+// Packets will be dropped if the buffer is full. Used by NewClient.
 var MaxQueueBuffer = 100
 
+// NewClient constructs a Sentry client and spawns a background goroutine to
+// handle packets sent by Client.Report.
 func NewClient(dsn string, tags map[string]string) (*Client, error) {
 	client := &Client{Transport: &HTTPTransport{}, Tags: tags, queue: make(chan *Packet, MaxQueueBuffer)}
 	go client.worker()
 	return client, client.SetDSN(dsn)
 }
 
+// Client encapsulates a connection to a Sentry server. It must be initialized
+// by calling NewClient. Modification of fields concurrently with Send or after
+// calling Report for the first time is not thread-safe.
 type Client struct {
 	Tags map[string]string
 
-	Transport    Transport
+	Transport Transport
+
+	// ErrorHandler is called when there is an error sending a packet.
 	ErrorHandler func(*Packet, error)
-	DropHandler  func(*Packet)
+	// DropHandler is called when a packet is dropped because the buffer is full.
+	DropHandler func(*Packet)
 
 	mu         sync.RWMutex
 	url        string
@@ -177,6 +189,8 @@ type Client struct {
 	queue      chan *Packet
 }
 
+// SetDSN updates a client with a new DNS. It safe to call after and
+// concurrently with calls to Report and Send.
 func (client *Client) SetDSN(dsn string) error {
 	if dsn == "" {
 		return nil
@@ -224,6 +238,8 @@ func (client *Client) worker() {
 	}
 }
 
+// Report asynchronously delivers a packet to the Sentry server. It is a no-op
+// when client is nil.
 func (client *Client) Report(packet *Packet) {
 	if client == nil {
 		return
@@ -242,6 +258,8 @@ func (client *Client) Close() {
 	close(client.queue)
 }
 
+// Report synchronously delivers a packet to the Sentry server. It is a no-op
+// when client is nil.
 func (client *Client) Send(packet *Packet) error {
 	if client == nil {
 		return nil
@@ -254,6 +272,8 @@ func (client *Client) Send(packet *Packet) error {
 	return client.Transport.Send(url, authHeader, packet)
 }
 
+// HTTPTransport is the default transport, delivering packets to Sentry via the
+// HTTP API.
 type HTTPTransport struct {
 	http http.Client
 }
