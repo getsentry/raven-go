@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"github.com/cupcake/raven-go"
 	"log"
 	"net/http"
@@ -19,7 +20,7 @@ func main() {
 	httpReq, _ := http.NewRequest("GET", "http://example.com/foo?bar=true", nil)
 	httpReq.RemoteAddr = "127.0.0.1:80"
 	httpReq.Header = http.Header{"Content-Type": {"text/html"}, "Content-Length": {"42"}}
-	packet := &raven.Packet{Message: "Test report", Interfaces: []raven.Interface{trace(), raven.NewHttp(httpReq)}}
+	packet := &raven.Packet{Message: "Test report", Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
 	err = client.Send(packet)
 	if err != nil {
 		log.Fatal(err)
