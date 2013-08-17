@@ -40,7 +40,7 @@ func TestStacktrace(t *testing.T) {
 		t.Error("got zero frames")
 	}
 
-	f := st.Frames[0]
+	f := st.Frames[len(st.Frames)-1]
 	filepath := "src/github.com/cupcake/raven-go/stacktrace_test.go"
 	if f.Filename != filepath {
 		t.Errorf("incorrect Filename; got %s, want %s", f.Filename, filepath)

@@ -23,8 +23,11 @@ type Stacktrace struct {
 func (s *Stacktrace) Class() string { return "sentry.interfaces.Stacktrace" }
 
 func (s *Stacktrace) Culprit() string {
-	if len(s.Frames) > 0 && s.Frames[0].Module != "" && s.Frames[0].Function != "" {
-		return s.Frames[0].Module + "." + s.Frames[0].Function
+	if len(s.Frames) > 0 {
+		f := s.Frames[len(s.Frames)-1]
+		if f.Module != "" && f.Function != "" {
+			return f.Module + "." + f.Function
+		}
 	}
 	return ""
 }
@@ -66,12 +69,9 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 			*frame.InApp = true
 		} else {
 			for _, prefix := range appPackagePrefixes {
-				if strings.HasPrefix(frame.Module, prefix) {
+				if strings.HasPrefix(frame.Module, prefix) && !strings.Contains(frame.Module, "vendor") && !strings.Contains(frame.Module, "third_party") {
 					*frame.InApp = true
 				}
-			}
-			if frame.InApp == nil {
-				*frame.InApp = false
 			}
 		}
 
@@ -97,6 +97,10 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 		}
 
 		frames = append(frames, frame)
+	}
+	// Sentry wants the frames with the oldest first, so reverse them
+	for i, j := 0, len(frames)-1; i < j; i, j = i+1, j-1 {
+		frames[i], frames[j] = frames[j], frames[i]
 	}
 	return &Stacktrace{frames}
 }
