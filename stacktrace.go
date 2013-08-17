@@ -17,7 +17,7 @@ import (
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Stacktrace
 type Stacktrace struct {
 	// Required
-	Frames []StacktraceFrame `json:"frames"`
+	Frames []*StacktraceFrame `json:"frames"`
 }
 
 func (s *Stacktrace) Class() string { return "sentry.interfaces.Stacktrace" }
@@ -57,52 +57,63 @@ type StacktraceFrame struct {
 // appPackagePrefixes is a list of prefixes used to check whether a package should
 // be considered "in app".
 func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktrace {
-	var frames []StacktraceFrame
+	var frames []*StacktraceFrame
 	for i := 1 + skip; ; i++ {
 		pc, file, line, ok := runtime.Caller(i)
 		if !ok {
 			break
 		}
-		frame := StacktraceFrame{AbsolutePath: file, Filename: trimPath(file), Lineno: line, InApp: new(bool)}
-		frame.Module, frame.Function = functionName(pc)
-		if frame.Module == "main" {
-			*frame.InApp = true
-		} else {
-			for _, prefix := range appPackagePrefixes {
-				if strings.HasPrefix(frame.Module, prefix) && !strings.Contains(frame.Module, "vendor") && !strings.Contains(frame.Module, "third_party") {
-					*frame.InApp = true
-				}
-			}
-		}
-
-		if context > 0 {
-			contextLines := fileContext(file, line-context, (context*2)+1)
-			if len(contextLines) > 0 {
-				for i, line := range contextLines {
-					switch {
-					case i < context:
-						frame.PreContext = append(frame.PreContext, string(line))
-					case i == context:
-						frame.ContextLine = string(line)
-					default:
-						frame.PostContext = append(frame.PostContext, string(line))
-					}
-				}
-			}
-		} else if context == -1 {
-			contextLine := fileContext(file, line, 1)
-			if len(contextLine) > 0 {
-				frame.ContextLine = string(contextLine[0])
-			}
-		}
-
-		frames = append(frames, frame)
+		frames = append(frames, NewStacktraceFrame(pc, file, line, context, appPackagePrefixes))
 	}
 	// Sentry wants the frames with the oldest first, so reverse them
 	for i, j := 0, len(frames)-1; i < j; i, j = i+1, j-1 {
 		frames[i], frames[j] = frames[j], frames[i]
 	}
 	return &Stacktrace{frames}
+}
+
+// Build a single frame using data returned from runtime.Caller.
+//
+// context is the number of surrounding lines that should be included for context.
+// Setting context to 3 would try to get seven lines. Setting context to -1 returns
+// one line with no surrounding context, and 0 returns no context.
+//
+// appPackagePrefixes is a list of prefixes used to check whether a package should
+// be considered "in app".
+func NewStacktraceFrame(pc uintptr, file string, line, context int, appPackagePrefixes []string) *StacktraceFrame {
+	frame := &StacktraceFrame{AbsolutePath: file, Filename: trimPath(file), Lineno: line, InApp: new(bool)}
+	frame.Module, frame.Function = functionName(pc)
+	if frame.Module == "main" {
+		*frame.InApp = true
+	} else {
+		for _, prefix := range appPackagePrefixes {
+			if strings.HasPrefix(frame.Module, prefix) && !strings.Contains(frame.Module, "vendor") && !strings.Contains(frame.Module, "third_party") {
+				*frame.InApp = true
+			}
+		}
+	}
+
+	if context > 0 {
+		contextLines := fileContext(file, line-context, (context*2)+1)
+		if len(contextLines) > 0 {
+			for i, line := range contextLines {
+				switch {
+				case i < context:
+					frame.PreContext = append(frame.PreContext, string(line))
+				case i == context:
+					frame.ContextLine = string(line)
+				default:
+					frame.PostContext = append(frame.PostContext, string(line))
+				}
+			}
+		}
+	} else if context == -1 {
+		contextLine := fileContext(file, line, 1)
+		if len(contextLine) > 0 {
+			frame.ContextLine = string(contextLine[0])
+		}
+	}
+	return frame
 }
 
 // Retrieve the name of the package and function containing the PC.
