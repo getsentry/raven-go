@@ -79,7 +79,7 @@ type Packet struct {
 
 // NewPacket constructs a packet with the specified message and interfaces.
 func NewPacket(message string, interfaces ...Interface) *Packet {
-	return &Packet{Message: message, Interfaces: interfaces}
+	return &Packet{Message: message, Interfaces: interfaces, Tags: make(map[string]string), Extra: make(map[string]interface{})}
 }
 
 // Init initializes required fields in a packet. It is typically called by
