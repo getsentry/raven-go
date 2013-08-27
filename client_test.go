@@ -65,7 +65,7 @@ func TestSetDSN(t *testing.T) {
 	if client.projectID != "1" {
 		t.Error("incorrect projectID:", client.projectID)
 	}
-	if client.authHeader != "Sentry sentry_version=3, sentry_key=u, sentry_secret=p" {
+	if client.authHeader != "Sentry sentry_version=4, sentry_key=u, sentry_secret=p" {
 		t.Error("incorrect authHeader:", client.authHeader)
 	}
 }

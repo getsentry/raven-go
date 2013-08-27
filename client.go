@@ -224,7 +224,7 @@ func (client *Client) SetDSN(dsn string) error {
 
 	client.url = uri.String()
 
-	client.authHeader = fmt.Sprintf("Sentry sentry_version=3, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
+	client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
 
 	return nil
 }
