@@ -2,11 +2,11 @@ package raven
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 )
 
 func NewHttp(req *http.Request) *Http {
-	// TODO: sanitization
 	proto := "http"
 	if req.TLS != nil || req.Header.Get("X-Forwarded-Proto") == "https" {
 		proto = "https"
@@ -14,7 +14,7 @@ func NewHttp(req *http.Request) *Http {
 	h := &Http{
 		Method:  req.Method,
 		Cookies: req.Header.Get("Cookie"),
-		Query:   req.URL.RawQuery,
+		Query:   sanitizeQuery(req.URL.Query()).Encode(),
 		URL:     proto + "://" + req.Host + req.URL.Path,
 		Headers: make(map[string]string),
 	}
@@ -25,6 +25,17 @@ func NewHttp(req *http.Request) *Http {
 		h.Headers[k] = strings.Join(v, "; ")
 	}
 	return h
+}
+
+var querySecretFields = []string{"password", "passphrase", "passwd", "secret"}
+
+func sanitizeQuery(query url.Values) url.Values {
+	for _, field := range querySecretFields {
+		if _, ok := query[field]; ok {
+			query[field] = []string{"********"}
+		}
+	}
+	return query
 }
 
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Http
