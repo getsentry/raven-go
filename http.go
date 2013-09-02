@@ -7,12 +7,15 @@ import (
 
 func NewHttp(req *http.Request) *Http {
 	// TODO: sanitization
-	// TODO: detect http vs https
+	proto := "http"
+	if req.TLS != nil || req.Header.Get("X-Forwarded-Proto") == "https" {
+		proto = "https"
+	}
 	h := &Http{
 		Method:  req.Method,
 		Cookies: req.Header.Get("Cookie"),
 		Query:   req.URL.RawQuery,
-		URL:     "http://" + req.Host + req.URL.Path,
+		URL:     proto + "://" + req.Host + req.URL.Path,
 		Headers: make(map[string]string),
 	}
 	if addr := strings.SplitN(req.RemoteAddr, ":", 2); len(addr) == 2 {
