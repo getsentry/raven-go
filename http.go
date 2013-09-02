@@ -30,9 +30,11 @@ func NewHttp(req *http.Request) *Http {
 var querySecretFields = []string{"password", "passphrase", "passwd", "secret"}
 
 func sanitizeQuery(query url.Values) url.Values {
-	for _, field := range querySecretFields {
-		if _, ok := query[field]; ok {
-			query[field] = []string{"********"}
+	for _, keyword := range querySecretFields {
+		for field := range query {
+			if strings.Contains(field, keyword) {
+				query[field] = []string{"********"}
+			}
 		}
 	}
 	return query
