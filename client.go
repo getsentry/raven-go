@@ -189,7 +189,7 @@ type Client struct {
 	queue      chan *Packet
 }
 
-// SetDSN updates a client with a new DNS. It safe to call after and
+// SetDSN updates a client with a new DSN. It safe to call after and
 // concurrently with calls to Report and Send.
 func (client *Client) SetDSN(dsn string) error {
 	if dsn == "" {
