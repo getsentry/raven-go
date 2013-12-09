@@ -16,7 +16,7 @@ func NewHttp(req *http.Request) *Http {
 		Cookies: req.Header.Get("Cookie"),
 		Query:   sanitizeQuery(req.URL.Query()).Encode(),
 		URL:     proto + "://" + req.Host + req.URL.Path,
-		Headers: make(map[string]string),
+		Headers: make(map[string]string, len(req.Header)),
 	}
 	if addr := strings.SplitN(req.RemoteAddr, ":", 2); len(addr) == 2 {
 		h.Env = map[string]string{"REMOTE_ADDR": addr[0], "REMOTE_PORT": addr[1]}
