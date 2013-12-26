@@ -51,7 +51,7 @@ func TestPacketInit(t *testing.T) {
 	if time.Time(packet.Timestamp).IsZero() {
 		t.Error("Timestamp is zero")
 	}
-	if len(packet.EventID) != 32 {
+	if len(packet.EventID) != 36 {
 		t.Error("incorrect EventID:", packet.EventID)
 	}
 	if len(packet.Tags) != 2 || packet.Tags["foo"] != "bar" || packet.Tags["baz"] != "buzz" {

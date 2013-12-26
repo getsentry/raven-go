@@ -4,9 +4,7 @@ package raven
 import (
 	"bytes"
 	"compress/zlib"
-	"crypto/rand"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -99,11 +97,7 @@ func (packet *Packet) Init(project string, parentTags map[string]string) error {
 		packet.Project = project
 	}
 	if packet.EventID == "" {
-		var err error
-		packet.EventID, err = randomID()
-		if err != nil {
-			return nil
-		}
+		packet.EventID = newUUID().String()
 	}
 	if time.Time(packet.Timestamp).IsZero() {
 		packet.Timestamp = Timestamp(time.Now())
@@ -139,15 +133,6 @@ func (packet *Packet) Init(project string, parentTags map[string]string) error {
 	}
 
 	return nil
-}
-
-func randomID() (string, error) {
-	id := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, id)
-	if err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(id), nil
 }
 
 func (packet *Packet) JSON() []byte {
