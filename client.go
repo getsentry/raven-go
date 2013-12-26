@@ -285,7 +285,7 @@ func (client *Client) CaptureMessage(message string, tags map[string]string, int
 	return eventID
 }
 
-// CapturePanic formats and delivers recover value information to the Sentry server.
+// CaptureErrors formats and delivers an errorto the Sentry server.
 // Adds a stacktrace to the packet, excluding the call to this method.
 func (client *Client) CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
 	packet := NewPacket(err.Error(), append(interfaces, NewException(err, NewStacktrace(1, 3, nil)))...)
@@ -294,9 +294,7 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 	return eventID
 }
 
-// CapturePanics recovers from a yet-unrecovered panic and delivers panic information
-// to the Sentry server. Adds a stacktrace to the packet, excluding the overhead of
-// this method.
+// CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
 func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) {
 	defer func() {
 		var packet *Packet
