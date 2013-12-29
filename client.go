@@ -71,9 +71,9 @@ type Packet struct {
 	Project   string    `json:"project"`
 	Timestamp Timestamp `json:"timestamp"`
 	Level     Severity  `json:"level"`
+	Logger    string    `json:"logger"`
 
 	// Optional
-	Logger     string                 `json:"logger,omitempty"`
 	Platform   string                 `json:"platform,omitempty"`
 	Culprit    string                 `json:"culprit,omitempty"`
 	Tags       map[string]string      `json:"tags,omitempty"`
@@ -110,6 +110,9 @@ func (packet *Packet) Init(project string, parentTags map[string]string) error {
 	}
 	if packet.Level == 0 {
 		packet.Level = ERROR
+	}
+	if packet.Logger == "" {
+		packet.Logger = "root"
 	}
 	if packet.ServerName == "" {
 		packet.ServerName = hostname
