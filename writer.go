@@ -12,10 +12,7 @@ func (w *Writer) Write(p []byte) (int, error) {
 
 	packet := NewPacket(message, &Message{message, nil})
 	packet.Level = w.Level
-	err := w.Client.Send(packet)
-	if err != nil {
-		return 0, err
-	}
+	w.Client.Capture(packet, nil)
 
 	return len(p), nil
 }

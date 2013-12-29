@@ -21,8 +21,8 @@ func main() {
 	httpReq.RemoteAddr = "127.0.0.1:80"
 	httpReq.Header = http.Header{"Content-Type": {"text/html"}, "Content-Length": {"42"}}
 	packet := &raven.Packet{Message: "Test report", Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
-	err = client.Send(packet)
-	if err != nil {
+	_, ch := client.Capture(packet, nil)
+	if err = <-ch; err != nil {
 		log.Fatal(err)
 	}
 	log.Print("sent packet successfully")
