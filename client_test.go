@@ -17,10 +17,11 @@ func TestPacketJSON(t *testing.T) {
 		Message:    "test",
 		Timestamp:  Timestamp(time.Date(2000, 01, 01, 0, 0, 0, 0, time.UTC)),
 		Level:      ERROR,
+		Logger:     "com.cupcake.raven-go.logger-test-packet-json",
 		Interfaces: []Interface{&Message{Message: "foo"}},
 	}
 
-	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00","level":40,"sentry.interfaces.Message":{"message":"foo"}}`
+	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00","level":40,"logger":"com.cupcake.raven-go.logger-test-packet-json","sentry.interfaces.Message":{"message":"foo"}}`
 	actual := string(packet.JSON())
 
 	if actual != expected {
@@ -43,6 +44,9 @@ func TestPacketInit(t *testing.T) {
 	}
 	if packet.Level != ERROR {
 		t.Errorf("incorrect Level: got %d, want %d", packet.Level, ERROR)
+	}
+	if packet.Logger != "root" {
+		t.Errorf("incorrect Logger: got %s, want %s", packet.Logger, "root")
 	}
 	if time.Time(packet.Timestamp).IsZero() {
 		t.Error("Timestamp is zero")
