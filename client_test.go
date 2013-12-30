@@ -22,7 +22,7 @@ func TestPacketJSON(t *testing.T) {
 		Interfaces: []Interface{&Message{Message: "foo"}},
 	}
 
-	packet.MergeTags(map[string]string{"foo": "foo", "baz": "buzz"})
+	packet.AddTags(map[string]string{"foo": "foo", "baz": "buzz"})
 
 	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00","level":40,"logger":"com.cupcake.raven-go.logger-test-packet-json","tags":[["foo","bar"],["foo","foo"],["baz","buzz"]],"sentry.interfaces.Message":{"message":"foo"}}`
 	actual := string(packet.JSON())
