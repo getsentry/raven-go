@@ -18,10 +18,13 @@ func TestPacketJSON(t *testing.T) {
 		Timestamp:  Timestamp(time.Date(2000, 01, 01, 0, 0, 0, 0, time.UTC)),
 		Level:      ERROR,
 		Logger:     "com.cupcake.raven-go.logger-test-packet-json",
+		Tags:       []Tag{Tag{"foo", "bar"}},
 		Interfaces: []Interface{&Message{Message: "foo"}},
 	}
 
-	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00","level":40,"logger":"com.cupcake.raven-go.logger-test-packet-json","sentry.interfaces.Message":{"message":"foo"}}`
+	packet.MergeTags(map[string]string{"foo": "foo", "baz": "buzz"})
+
+	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00","level":40,"logger":"com.cupcake.raven-go.logger-test-packet-json","tags":[["foo","bar"],["foo","foo"],["baz","buzz"]],"sentry.interfaces.Message":{"message":"foo"}}`
 	actual := string(packet.JSON())
 
 	if actual != expected {
@@ -30,8 +33,8 @@ func TestPacketJSON(t *testing.T) {
 }
 
 func TestPacketInit(t *testing.T) {
-	packet := &Packet{Message: "a", Tags: map[string]string{"foo": "bar"}, Interfaces: []Interface{&testInterface{}}}
-	packet.Init("foo", map[string]string{"foo": "foo", "baz": "buzz"})
+	packet := &Packet{Message: "a", Interfaces: []Interface{&testInterface{}}}
+	packet.Init("foo")
 
 	if packet.Project != "foo" {
 		t.Error("incorrect Project:", packet.Project)
@@ -53,9 +56,6 @@ func TestPacketInit(t *testing.T) {
 	}
 	if len(packet.EventID) != 32 {
 		t.Error("incorrect EventID:", packet.EventID)
-	}
-	if len(packet.Tags) != 2 || packet.Tags["foo"] != "bar" || packet.Tags["baz"] != "buzz" {
-		t.Errorf("incorrect Tags: %#v", packet.Tags)
 	}
 }
 
