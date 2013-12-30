@@ -100,9 +100,9 @@ func (packet *Packet) Init(project string, parentTags map[string]string) error {
 	}
 	if packet.EventID == "" {
 		var err error
-		packet.EventID, err = randomID()
+		packet.EventID, err = uuid()
 		if err != nil {
-			return nil
+			return err
 		}
 	}
 	if time.Time(packet.Timestamp).IsZero() {
@@ -141,13 +141,21 @@ func (packet *Packet) Init(project string, parentTags map[string]string) error {
 	return nil
 }
 
-func randomID() (string, error) {
+func uuid() (string, error) {
 	id := make([]byte, 16)
 	_, err := io.ReadFull(rand.Reader, id)
 	if err != nil {
 		return "", err
 	}
+	id[6] &= 0x0F // clear version
+	id[6] |= 0x40 // set version to 4 (random uuid)
+	id[8] &= 0x3F // clear variant
+	id[8] |= 0x80 // set to IETF variant
 	return hex.EncodeToString(id), nil
+}
+
+func FormatUUID(id string) string {
+	return id[:8] + "-" + id[8:12] + "-" + id[12:16] + "-" + id[16:20] + "-" + id[20:]
 }
 
 func (packet *Packet) JSON() []byte {
