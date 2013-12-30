@@ -22,11 +22,11 @@ type Stacktrace struct {
 
 func (s *Stacktrace) Class() string { return "sentry.interfaces.Stacktrace" }
 
-func (s *Stacktrace) Culprit() string {
+func (s *Stacktrace) Culprit() Culprit {
 	if len(s.Frames) > 0 {
 		f := s.Frames[len(s.Frames)-1]
 		if f.Module != "" && f.Function != "" {
-			return f.Module + "." + f.Function
+			return Culprit(f.Module + "." + f.Function)
 		}
 	}
 	return ""

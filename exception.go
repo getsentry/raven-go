@@ -33,7 +33,7 @@ type Exception struct {
 
 func (e *Exception) Class() string { return "sentry.interfaces.Exception" }
 
-func (e *Exception) Culprit() string {
+func (e *Exception) Culprit() Culprit {
 	if e.Stacktrace == nil {
 		return ""
 	}
