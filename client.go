@@ -95,7 +95,7 @@ type Packet struct {
 
 // NewPacket constructs a packet with the specified message and interfaces.
 func NewPacket(message string, interfaces ...Interface) *Packet {
-	return &Packet{Message: message, Interfaces: interfaces, Tags: make([]Tag, 0), Extra: make(map[string]interface{})}
+	return &Packet{Message: message, Interfaces: interfaces, Extra: make(map[string]interface{})}
 }
 
 // Init initializes required fields in a packet. It is typically called by
@@ -141,7 +141,7 @@ func (packet *Packet) Init(project string) error {
 	return nil
 }
 
-func (packet *Packet) MergeTags(tags map[string]string) {
+func (packet *Packet) AddTags(tags map[string]string) {
 	for k, v := range tags {
 		packet.Tags = append(packet.Tags, Tag{k, v})
 	}
@@ -272,8 +272,8 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	ch = make(chan error, 1)
 
 	// Merge capture tags and client tags
-	packet.MergeTags(captureTags)
-	packet.MergeTags(client.Tags)
+	packet.AddTags(captureTags)
+	packet.AddTags(client.Tags)
 
 	// Initialize any required packet fields
 	client.mu.RLock()
