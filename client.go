@@ -278,8 +278,8 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 }
 
 // CaptureMessage formats and delivers a string message to the Sentry server.
-func (client *Client) CaptureMessage(message string, tags map[string]string) string {
-	packet := NewPacket(message, &Message{message, nil})
+func (client *Client) CaptureMessage(message string, tags map[string]string, interfaces ...Interface) string {
+	packet := NewPacket(message, append(interfaces, &Message{message, nil})...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -287,8 +287,8 @@ func (client *Client) CaptureMessage(message string, tags map[string]string) str
 
 // CapturePanic formats and delivers recover value information to the Sentry server.
 // Adds a stacktrace to the packet, excluding the call to this method.
-func (client *Client) CapturePanic(err error, tags map[string]string) string {
-	packet := NewPacket(err.Error(), NewException(err, NewStacktrace(1, 3, nil)))
+func (client *Client) CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
+	packet := NewPacket(err.Error(), append(interfaces, NewException(err, NewStacktrace(1, 3, nil)))...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -297,17 +297,17 @@ func (client *Client) CapturePanic(err error, tags map[string]string) string {
 // CapturePanics recovers from a yet-unrecovered panic and delivers panic information
 // to the Sentry server. Adds a stacktrace to the packet, excluding the overhead of
 // this method.
-func (client *Client) CapturePanics(tags map[string]string, f func()) {
+func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) {
 	defer func() {
 		var packet *Packet
 		switch rval := recover().(type) {
 		case nil:
 			return
 		case error:
-			packet = NewPacket(rval.Error(), NewException(rval, NewStacktrace(2, 3, nil)))
+			packet = NewPacket(rval.Error(), append(interfaces, NewException(rval, NewStacktrace(2, 3, nil)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
-			packet = NewPacket(rvalStr, NewException(errors.New(rvalStr), NewStacktrace(2, 3, nil)))
+			packet = NewPacket(rvalStr, append(interfaces, NewException(errors.New(rvalStr), NewStacktrace(2, 3, nil)))...)
 		}
 
 		client.Capture(packet, tags)
