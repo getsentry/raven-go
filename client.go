@@ -101,7 +101,7 @@ type packet struct {
 	Query        *Query      `json:"sentry.interfaces.Query,omitempty"`
 
 	// Return channel
-	ch chan error `json:"-"`
+	ch chan error
 }
 
 // A Culpriter is an attribute that can derive the culprit of a Sentry event.
