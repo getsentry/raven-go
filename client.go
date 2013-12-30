@@ -38,6 +38,13 @@ const (
 	FATAL
 )
 
+// An Interface is a Sentry interface that will be serialized as JSON.
+// It must implement json.Marshaler or use json struct tags.
+type Interface interface {
+	// The Sentry class name. Example: sentry.interfaces.Stacktrace
+	Class() string
+}
+
 // A Tag is a key/value pair that describes a Sentry event.
 // http://sentry.readthedocs.org/en/latest/developer/client/index.html#id1
 type Tag struct {
@@ -92,13 +99,7 @@ type packet struct {
 	Extra      Extra      `json:"extra,omitempty"`
 
 	// Optional interfaces
-	ParamMessage *Message    `json:"sentry.interfaces.Message,omitempty"`
-	Exception    *Exception  `json:"exception,omitempty"`
-	Stacktrace   *Stacktrace `json:"stacktrace,omitempty"`
-	Template     *Template   `json:"template,omitempty"`
-	Http         *Http       `json:"request,omitempty"`
-	User         *User       `json:"user,omitempty"`
-	Query        *Query      `json:"sentry.interfaces.Query,omitempty"`
+	Interfaces []Interface `json:"-"`
 
 	// Return channel
 	ch chan error
@@ -166,40 +167,31 @@ func (packet *packet) MergeAttributes(attr []interface{}) error {
 			for tag, val := range attrVal {
 				packet.Extra[tag] = val
 			}
-		case *Message:
-			packet.ParamMessage = attrVal
-		case Message:
-			packet.ParamMessage = &attrVal
-		case *Exception:
-			packet.Exception = attrVal
-		case Exception:
-			packet.Exception = &attrVal
-		case *Stacktrace:
-			packet.Stacktrace = attrVal
-		case Stacktrace:
-			packet.Stacktrace = &attrVal
-		case *Template:
-			packet.Template = attrVal
-		case Template:
-			packet.Template = &attrVal
-		case *Http:
-			packet.Http = attrVal
-		case Http:
-			packet.Http = &attrVal
-		case *User:
-			packet.User = attrVal
-		case User:
-			packet.User = &attrVal
-		case *Query:
-			packet.Query = attrVal
-		case Query:
-			packet.Query = &attrVal
+		case Interface:
+			packet.Interfaces = append(packet.Interfaces, attrVal)
 		default:
 			return errors.New("raven: bad interface")
 		}
 	}
 
 	return nil
+}
+
+func (packet *packet) JSON() []byte {
+	packetJSON, _ := json.Marshal(packet)
+
+	interfaces := make(map[string]Interface, len(packet.Interfaces))
+	for _, inter := range packet.Interfaces {
+		interfaces[inter.Class()] = inter
+	}
+
+	if len(interfaces) > 0 {
+		interfaceJSON, _ := json.Marshal(interfaces)
+		packetJSON[len(packetJSON)-1] = ','
+		packetJSON = append(packetJSON, interfaceJSON[1:]...)
+	}
+
+	return packetJSON
 }
 
 // The maximum number of packets that will be buffered waiting to be delivered.
@@ -377,11 +369,13 @@ func (client *Client) NewPacket(message string, attr ...interface{}) (*packet, e
 		packet.ServerName = ServerName(hostname)
 	}
 	if packet.Culprit == "" {
-		if packet.Exception != nil {
-			packet.Culprit = packet.Exception.Culprit()
-		}
-		if packet.Stacktrace != nil {
-			packet.Culprit = packet.Stacktrace.Culprit()
+		for _, inter := range packet.Interfaces {
+			if c, ok := inter.(Culpriter); ok {
+				packet.Culprit = c.Culprit()
+				if packet.Culprit != "" {
+					break
+				}
+			}
 		}
 	}
 
@@ -424,7 +418,7 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *packet) error {
 
 // serializedPacket converts packets to their optimal transmission encoding.
 func serializedPacket(packet *packet) (r io.Reader, contentType string) {
-	packetJSON, _ := json.Marshal(packet)
+	packetJSON := packet.JSON()
 
 	// Only deflate/base64 the packet if it is bigger than 1KB, as there is
 	// overhead.
