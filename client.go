@@ -61,6 +61,15 @@ type outgoingPacket struct {
 	ch     chan error
 }
 
+type Tag struct {
+	Key   string
+	Value string
+}
+
+func (tag *Tag) MarshalJSON() ([]byte, error) {
+	return json.Marshal([2]string{tag.Key, tag.Value})
+}
+
 // http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
 type Packet struct {
 	// Required
@@ -76,7 +85,7 @@ type Packet struct {
 	// Optional
 	Platform   string                 `json:"platform,omitempty"`
 	Culprit    string                 `json:"culprit,omitempty"`
-	Tags       map[string]string      `json:"tags,omitempty"`
+	Tags       []Tag                  `json:"tags,omitempty"`
 	ServerName string                 `json:"server_name,omitempty"`
 	Modules    []map[string]string    `json:"modules,omitempty"`
 	Extra      map[string]interface{} `json:"extra,omitempty"`
@@ -86,12 +95,12 @@ type Packet struct {
 
 // NewPacket constructs a packet with the specified message and interfaces.
 func NewPacket(message string, interfaces ...Interface) *Packet {
-	return &Packet{Message: message, Interfaces: interfaces, Tags: make(map[string]string), Extra: make(map[string]interface{})}
+	return &Packet{Message: message, Interfaces: interfaces, Extra: make(map[string]interface{})}
 }
 
 // Init initializes required fields in a packet. It is typically called by
 // Client.Send/Report automatically.
-func (packet *Packet) Init(project string, parentTags map[string]string) error {
+func (packet *Packet) Init(project string) error {
 	if packet.Message == "" {
 		return errors.New("raven: empty message")
 	}
@@ -118,15 +127,6 @@ func (packet *Packet) Init(project string, parentTags map[string]string) error {
 		packet.ServerName = hostname
 	}
 
-	tags := make(map[string]string, len(parentTags)+len(packet.Tags))
-	for k, v := range parentTags {
-		tags[k] = v
-	}
-	for k, v := range packet.Tags {
-		tags[k] = v
-	}
-	packet.Tags = tags
-
 	if packet.Culprit == "" {
 		for _, inter := range packet.Interfaces {
 			if c, ok := inter.(Culpriter); ok {
@@ -139,6 +139,12 @@ func (packet *Packet) Init(project string, parentTags map[string]string) error {
 	}
 
 	return nil
+}
+
+func (packet *Packet) AddTags(tags map[string]string) {
+	for k, v := range tags {
+		packet.Tags = append(packet.Tags, Tag{k, v})
+	}
 }
 
 func uuid() (string, error) {
@@ -265,21 +271,16 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 
 	ch = make(chan error, 1)
 
-	// Merge client tags and capture tags
-	tags := make(map[string]string, len(client.Tags)+len(captureTags))
-	for tag, value := range client.Tags {
-		tags[tag] = value
-	}
-	for tag, value := range captureTags {
-		tags[tag] = value
-	}
+	// Merge capture tags and client tags
+	packet.AddTags(captureTags)
+	packet.AddTags(client.Tags)
 
 	// Initialize any required packet fields
 	client.mu.RLock()
 	projectID := client.projectID
 	client.mu.RUnlock()
 
-	err := packet.Init(projectID, tags)
+	err := packet.Init(projectID)
 	if err != nil {
 		ch <- err
 		return
