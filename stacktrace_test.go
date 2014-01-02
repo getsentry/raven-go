@@ -1,21 +1,25 @@
 package raven
 
 import (
+	"fmt"
+	"go/build"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 )
 
-var functionNameTests = []struct {
+type FunctionNameTest struct {
 	skip int
 	pack string
 	name string
-}{
-	{0, "github.com/cupcake/raven-go", "TestFunctionName"},
-	{1, "testing", "tRunner"},
-	{2, "runtime", "goexit"},
-	{100, "", ""},
 }
+
+var (
+	thisFile          string
+	thisPackage       string
+	functionNameTests []FunctionNameTest
+)
 
 func TestFunctionName(t *testing.T) {
 	for _, test := range functionNameTests {
@@ -41,23 +45,22 @@ func TestStacktrace(t *testing.T) {
 	}
 
 	f := st.Frames[len(st.Frames)-1]
-	filepath := "src/github.com/cupcake/raven-go/stacktrace_test.go"
-	if f.Filename != filepath {
-		t.Errorf("incorrect Filename; got %s, want %s", f.Filename, filepath)
+	if f.Filename != thisFile {
+		t.Errorf("incorrect Filename; got %s, want %s", f.Filename, thisFile)
 	}
-	if !strings.HasSuffix(f.AbsolutePath, filepath) {
+	if !strings.HasSuffix(f.AbsolutePath, thisFile) {
 		t.Error("incorrect AbsolutePath:", f.AbsolutePath)
 	}
 	if f.Function != "trace" {
 		t.Error("incorrect Function:", f.Function)
 	}
-	if f.Module != "github.com/cupcake/raven-go" {
+	if f.Module != thisPackage {
 		t.Error("incorrect Module:", f.Module)
 	}
-	if f.Lineno < 50 {
+	if f.Lineno != 83 {
 		t.Error("incorrect Lineno:", f.Lineno)
 	}
-	if f.ContextLine != "\treturn NewStacktrace(0, 2, []string{\"github.com/cupcake/raven-go\"})" {
+	if f.ContextLine != "\treturn NewStacktrace(0, 2, []string{thisPackage})" {
 		t.Errorf("incorrect ContextLine: %#v", f.ContextLine)
 	}
 	if len(f.PreContext) != 2 || f.PreContext[0] != "// a" || f.PreContext[1] != "func trace() *Stacktrace {" {
@@ -70,13 +73,51 @@ func TestStacktrace(t *testing.T) {
 		t.Error("expected InApp to be true")
 	}
 
-	if st.Culprit() != "github.com/cupcake/raven-go.trace" {
+	if st.Culprit() != fmt.Sprintf("%s.trace", thisPackage) {
 		t.Error("incorrect Culprit:", st.Culprit())
 	}
 }
 
 // a
 func trace() *Stacktrace {
-	return NewStacktrace(0, 2, []string{"github.com/cupcake/raven-go"})
+	return NewStacktrace(0, 2, []string{thisPackage})
 	// b
+}
+
+func derivePackage() (file, pack string) {
+	// Get file name by seeking caller's file name.
+	_, callerFile, _, ok := runtime.Caller(1)
+	if !ok {
+		return
+	}
+
+	// Trim file name
+	file = callerFile
+	for _, dir := range build.Default.SrcDirs() {
+		dir := dir + string(filepath.Separator)
+		if trimmed := strings.TrimPrefix(callerFile, dir); len(trimmed) < len(file) {
+			file = trimmed
+		}
+	}
+
+	// Now derive package name
+	dir := filepath.Dir(callerFile)
+
+	dirPkg, err := build.ImportDir(dir, build.AllowBinary)
+	if err != nil {
+		return
+	}
+
+	pack = dirPkg.ImportPath
+	return
+}
+
+func init() {
+	thisFile, thisPackage = derivePackage()
+	functionNameTests = []FunctionNameTest{
+		{0, thisPackage, "TestFunctionName"},
+		{1, "testing", "tRunner"},
+		{2, "runtime", "goexit"},
+		{100, "", ""},
+	}
 }
