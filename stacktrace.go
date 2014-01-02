@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"go/build"
 	"io/ioutil"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -167,15 +168,11 @@ var trimPaths []string
 // Try to trim the GOROOT or GOPATH prefix off of a filename
 func trimPath(filename string) string {
 	for _, prefix := range trimPaths {
-		if prefix[len(prefix)-1] != '/' {
-			prefix += "/"
+		if prefix[len(prefix)-1] != filepath.Separator {
+			prefix += string(filepath.Separator)
 		}
-		trimmed := filename
-		// TODO: Use strings.TrimPrefix when Go 1.1 has been released
-		if strings.HasPrefix(filename, prefix) {
-			trimmed = filename[len(prefix):]
-		}
-		if len(trimmed) < len(filename) {
+
+		if trimmed := strings.TrimPrefix(filename, prefix); len(trimmed) < len(filename) {
 			return trimmed
 		}
 	}
