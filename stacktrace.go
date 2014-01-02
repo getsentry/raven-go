@@ -7,8 +7,8 @@ package raven
 
 import (
 	"bytes"
+	"go/build"
 	"io/ioutil"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -183,8 +183,5 @@ func trimPath(filename string) string {
 }
 
 func init() {
-	trimPaths = []string{runtime.GOROOT()}
-	if path := os.Getenv("GOPATH"); path != "" {
-		trimPaths = append(trimPaths, strings.Split(path, ":")...)
-	}
+	trimPaths = build.Default.SrcDirs()
 }
