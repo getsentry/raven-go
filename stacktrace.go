@@ -23,10 +23,10 @@ type Stacktrace struct {
 func (s *Stacktrace) Class() string { return "sentry.interfaces.Stacktrace" }
 
 func (s *Stacktrace) Culprit() string {
-	if len(s.Frames) > 0 {
-		f := s.Frames[len(s.Frames)-1]
-		if f.Module != "" && f.Function != "" {
-			return f.Module + "." + f.Function
+	for i := len(s.Frames) - 1; i >= 0; i-- {
+		frame := s.Frames[i]
+		if *frame.InApp == true && frame.Module != "" && frame.Function != "" {
+			return frame.Module + "." + frame.Function
 		}
 	}
 	return ""
