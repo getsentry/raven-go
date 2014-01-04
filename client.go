@@ -24,7 +24,7 @@ const userAgent = "go-raven/1.0"
 
 type Severity int
 
-var ErrPacketDropped = errors.New("raven: packet dropped")
+var ErrEventDropped = errors.New("raven: event dropped")
 
 // http://docs.python.org/2/howto/logging.html#logging-levels
 const (
@@ -53,12 +53,12 @@ type Culpriter interface {
 }
 
 type Transport interface {
-	Send(url, authHeader string, packet *Packet) error
+	Send(url, authHeader string, eventInfo *EventInfo) error
 }
 
-type outgoingPacket struct {
-	packet *Packet
-	ch     chan error
+type event struct {
+	info *EventInfo
+	ch   chan error
 }
 
 type Tag struct {
@@ -71,11 +71,11 @@ func (tag *Tag) MarshalJSON() ([]byte, error) {
 }
 
 // http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
-type Packet struct {
+type EventInfo struct {
 	// Required
 	Message string `json:"message"`
 
-	// Required, set automatically by Client.Send/Report via Packet.Init if blank
+	// Required, set automatically by Client.Send/Report via EventInfo.Init if blank
 	EventID   string    `json:"event_id"`
 	Project   string    `json:"project"`
 	Timestamp Timestamp `json:"timestamp"`
@@ -94,44 +94,44 @@ type Packet struct {
 }
 
 // NewPacket constructs a packet with the specified message and interfaces.
-func NewPacket(message string, interfaces ...Interface) *Packet {
-	return &Packet{Message: message, Interfaces: interfaces, Extra: make(map[string]interface{})}
+func NewEventInfo(message string, interfaces ...Interface) *EventInfo {
+	return &EventInfo{Message: message, Interfaces: interfaces, Extra: make(map[string]interface{})}
 }
 
-// Init initializes required fields in a packet. It is typically called by
+// Init initializes required fields in event info. It is typically called by
 // Client.Send/Report automatically.
-func (packet *Packet) Init(project string) error {
-	if packet.Message == "" {
+func (eventInfo *EventInfo) Init(project string) error {
+	if eventInfo.Message == "" {
 		return errors.New("raven: empty message")
 	}
-	if packet.Project == "" {
-		packet.Project = project
+	if eventInfo.Project == "" {
+		eventInfo.Project = project
 	}
-	if packet.EventID == "" {
+	if eventInfo.EventID == "" {
 		var err error
-		packet.EventID, err = uuid()
+		eventInfo.EventID, err = uuid()
 		if err != nil {
 			return err
 		}
 	}
-	if time.Time(packet.Timestamp).IsZero() {
-		packet.Timestamp = Timestamp(time.Now())
+	if time.Time(eventInfo.Timestamp).IsZero() {
+		eventInfo.Timestamp = Timestamp(time.Now())
 	}
-	if packet.Level == 0 {
-		packet.Level = ERROR
+	if eventInfo.Level == 0 {
+		eventInfo.Level = ERROR
 	}
-	if packet.Logger == "" {
-		packet.Logger = "root"
+	if eventInfo.Logger == "" {
+		eventInfo.Logger = "root"
 	}
-	if packet.ServerName == "" {
-		packet.ServerName = hostname
+	if eventInfo.ServerName == "" {
+		eventInfo.ServerName = hostname
 	}
 
-	if packet.Culprit == "" {
-		for _, inter := range packet.Interfaces {
+	if eventInfo.Culprit == "" {
+		for _, inter := range eventInfo.Interfaces {
 			if c, ok := inter.(Culpriter); ok {
-				packet.Culprit = c.Culprit()
-				if packet.Culprit != "" {
+				eventInfo.Culprit = c.Culprit()
+				if eventInfo.Culprit != "" {
 					break
 				}
 			}
@@ -141,9 +141,9 @@ func (packet *Packet) Init(project string) error {
 	return nil
 }
 
-func (packet *Packet) AddTags(tags map[string]string) {
+func (eventInfo *EventInfo) AddTags(tags map[string]string) {
 	for k, v := range tags {
-		packet.Tags = append(packet.Tags, Tag{k, v})
+		eventInfo.Tags = append(eventInfo.Tags, Tag{k, v})
 	}
 }
 
@@ -164,21 +164,21 @@ func FormatUUID(id string) string {
 	return id[:8] + "-" + id[8:12] + "-" + id[12:16] + "-" + id[16:20] + "-" + id[20:]
 }
 
-func (packet *Packet) JSON() []byte {
-	packetJSON, _ := json.Marshal(packet)
+func (eventInfo *EventInfo) JSON() []byte {
+	eventInfoJSON, _ := json.Marshal(eventInfo)
 
-	interfaces := make(map[string]Interface, len(packet.Interfaces))
-	for _, inter := range packet.Interfaces {
+	interfaces := make(map[string]Interface, len(eventInfo.Interfaces))
+	for _, inter := range eventInfo.Interfaces {
 		interfaces[inter.Class()] = inter
 	}
 
 	if len(interfaces) > 0 {
 		interfaceJSON, _ := json.Marshal(interfaces)
-		packetJSON[len(packetJSON)-1] = ','
-		packetJSON = append(packetJSON, interfaceJSON[1:]...)
+		eventInfoJSON[len(eventInfoJSON)-1] = ','
+		eventInfoJSON = append(eventInfoJSON, interfaceJSON[1:]...)
 	}
 
-	return packetJSON
+	return eventInfoJSON
 }
 
 // The maximum number of packets that will be buffered waiting to be delivered.
@@ -188,7 +188,7 @@ var MaxQueueBuffer = 100
 // NewClient constructs a Sentry client and spawns a background goroutine to
 // handle packets sent by Client.Report.
 func NewClient(dsn string, tags map[string]string) (*Client, error) {
-	client := &Client{Transport: &HTTPTransport{}, Tags: tags, queue: make(chan *outgoingPacket, MaxQueueBuffer)}
+	client := &Client{Transport: &HTTPTransport{}, Tags: tags, queue: make(chan *event, MaxQueueBuffer)}
 	go client.worker()
 	return client, client.SetDSN(dsn)
 }
@@ -201,14 +201,14 @@ type Client struct {
 
 	Transport Transport
 
-	// DropHandler is called when a packet is dropped because the buffer is full.
-	DropHandler func(*Packet)
+	// DropHandler is called when an event is dropped because the buffer is full.
+	DropHandler func(*EventInfo)
 
 	mu         sync.RWMutex
 	url        string
 	projectID  string
 	authHeader string
-	queue      chan *outgoingPacket
+	queue      chan *event
 }
 
 // SetDSN updates a client with a new DSN. It safe to call after and
@@ -252,19 +252,19 @@ func (client *Client) SetDSN(dsn string) error {
 }
 
 func (client *Client) worker() {
-	for outgoingPacket := range client.queue {
+	for event := range client.queue {
 		client.mu.RLock()
 		url, authHeader := client.url, client.authHeader
 		client.mu.RUnlock()
 
-		outgoingPacket.ch <- client.Transport.Send(url, authHeader, outgoingPacket.packet)
+		event.ch <- client.Transport.Send(url, authHeader, event.info)
 	}
 }
 
-// Capture asynchronously delivers a packet to the Sentry server. It is a no-op
+// Capture asynchronously delivers a eventInfo to the Sentry server. It is a no-op
 // when client is nil. A channel is provided if it is important to check for a
 // send's success.
-func (client *Client) Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
+func (client *Client) Capture(eventInfo *EventInfo, captureTags map[string]string) (eventID string, ch chan error) {
 	if client == nil {
 		return
 	}
@@ -272,48 +272,48 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	ch = make(chan error, 1)
 
 	// Merge capture tags and client tags
-	packet.AddTags(captureTags)
-	packet.AddTags(client.Tags)
+	eventInfo.AddTags(captureTags)
+	eventInfo.AddTags(client.Tags)
 
-	// Initialize any required packet fields
+	// Initialize any required eventInfo fields
 	client.mu.RLock()
 	projectID := client.projectID
 	client.mu.RUnlock()
 
-	err := packet.Init(projectID)
+	err := eventInfo.Init(projectID)
 	if err != nil {
 		ch <- err
 		return
 	}
 
-	outgoingPacket := &outgoingPacket{packet, ch}
+	event := &event{eventInfo, ch}
 
 	select {
-	case client.queue <- outgoingPacket:
+	case client.queue <- event:
 	default:
-		// Send would block, drop the packet
+		// Send would block, drop the eventInfo
 		if client.DropHandler != nil {
-			client.DropHandler(packet)
+			client.DropHandler(eventInfo)
 		}
-		ch <- ErrPacketDropped
+		ch <- ErrEventDropped
 	}
 
-	return packet.EventID, ch
+	return eventInfo.EventID, ch
 }
 
 // CaptureMessage formats and delivers a string message to the Sentry server.
 func (client *Client) CaptureMessage(message string, tags map[string]string, interfaces ...Interface) string {
-	packet := NewPacket(message, append(interfaces, &Message{message, nil})...)
-	eventID, _ := client.Capture(packet, tags)
+	eventInfo := NewEventInfo(message, append(interfaces, &Message{message, nil})...)
+	eventID, _ := client.Capture(eventInfo, tags)
 
 	return eventID
 }
 
 // CaptureErrors formats and delivers an errorto the Sentry server.
-// Adds a stacktrace to the packet, excluding the call to this method.
+// Adds a stacktrace to eventInfo, excluding the call to this method.
 func (client *Client) CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
-	packet := NewPacket(err.Error(), append(interfaces, NewException(err, NewStacktrace(1, 3, nil)))...)
-	eventID, _ := client.Capture(packet, tags)
+	eventInfo := NewEventInfo(err.Error(), append(interfaces, NewException(err, NewStacktrace(1, 3, nil)))...)
+	eventID, _ := client.Capture(eventInfo, tags)
 
 	return eventID
 }
@@ -321,18 +321,18 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
 func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) {
 	defer func() {
-		var packet *Packet
+		var eventInfo *EventInfo
 		switch rval := recover().(type) {
 		case nil:
 			return
 		case error:
-			packet = NewPacket(rval.Error(), append(interfaces, NewException(rval, NewStacktrace(2, 3, nil)))...)
+			eventInfo = NewEventInfo(rval.Error(), append(interfaces, NewException(rval, NewStacktrace(2, 3, nil)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
-			packet = NewPacket(rvalStr, append(interfaces, NewException(errors.New(rvalStr), NewStacktrace(2, 3, nil)))...)
+			eventInfo = NewEventInfo(rvalStr, append(interfaces, NewException(errors.New(rvalStr), NewStacktrace(2, 3, nil)))...)
 		}
 
-		client.Capture(packet, tags)
+		client.Capture(eventInfo, tags)
 	}()
 
 	f()
@@ -348,12 +348,12 @@ type HTTPTransport struct {
 	http http.Client
 }
 
-func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
+func (t *HTTPTransport) Send(url, authHeader string, eventInfo *EventInfo) error {
 	if url == "" {
 		return nil
 	}
 
-	body, contentType := serializedPacket(packet)
+	body, contentType := serializedPacket(eventInfo)
 	req, _ := http.NewRequest("POST", url, body)
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
@@ -370,10 +370,10 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	return nil
 }
 
-func serializedPacket(packet *Packet) (r io.Reader, contentType string) {
-	packetJSON := packet.JSON()
+func serializedPacket(eventInfo *EventInfo) (r io.Reader, contentType string) {
+	packetJSON := eventInfo.JSON()
 
-	// Only deflate/base64 the packet if it is bigger than 1KB, as there is
+	// Only deflate/base64 the eventInfo if it is bigger than 1KB, as there is
 	// overhead.
 	if len(packetJSON) > 1000 {
 		buf := &bytes.Buffer{}

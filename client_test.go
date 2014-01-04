@@ -11,21 +11,21 @@ func (t *testInterface) Class() string   { return "sentry.interfaces.Test" }
 func (t *testInterface) Culprit() string { return "codez" }
 
 func TestPacketJSON(t *testing.T) {
-	packet := &Packet{
+	eventInfo := &EventInfo{
 		Project:    "1",
 		EventID:    "2",
 		Message:    "test",
 		Timestamp:  Timestamp(time.Date(2000, 01, 01, 0, 0, 0, 0, time.UTC)),
 		Level:      ERROR,
-		Logger:     "com.cupcake.raven-go.logger-test-packet-json",
+		Logger:     "com.cupcake.raven-go.logger-test-eventInfo-json",
 		Tags:       []Tag{Tag{"foo", "bar"}},
 		Interfaces: []Interface{&Message{Message: "foo"}},
 	}
 
-	packet.AddTags(map[string]string{"foo": "foo", "baz": "buzz"})
+	eventInfo.AddTags(map[string]string{"foo": "foo", "baz": "buzz"})
 
-	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00","level":40,"logger":"com.cupcake.raven-go.logger-test-packet-json","tags":[["foo","bar"],["foo","foo"],["baz","buzz"]],"sentry.interfaces.Message":{"message":"foo"}}`
-	actual := string(packet.JSON())
+	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00","level":40,"logger":"com.cupcake.raven-go.logger-test-eventInfo-json","tags":[["foo","bar"],["foo","foo"],["baz","buzz"]],"sentry.interfaces.Message":{"message":"foo"}}`
+	actual := string(eventInfo.JSON())
 
 	if actual != expected {
 		t.Errorf("incorrect json; got %s, want %s", actual, expected)
@@ -33,29 +33,29 @@ func TestPacketJSON(t *testing.T) {
 }
 
 func TestPacketInit(t *testing.T) {
-	packet := &Packet{Message: "a", Interfaces: []Interface{&testInterface{}}}
-	packet.Init("foo")
+	eventInfo := &EventInfo{Message: "a", Interfaces: []Interface{&testInterface{}}}
+	eventInfo.Init("foo")
 
-	if packet.Project != "foo" {
-		t.Error("incorrect Project:", packet.Project)
+	if eventInfo.Project != "foo" {
+		t.Error("incorrect Project:", eventInfo.Project)
 	}
-	if packet.Culprit != "codez" {
-		t.Error("incorrect Culprit:", packet.Culprit)
+	if eventInfo.Culprit != "codez" {
+		t.Error("incorrect Culprit:", eventInfo.Culprit)
 	}
-	if packet.ServerName == "" {
+	if eventInfo.ServerName == "" {
 		t.Errorf("ServerName should not be empty")
 	}
-	if packet.Level != ERROR {
-		t.Errorf("incorrect Level: got %d, want %d", packet.Level, ERROR)
+	if eventInfo.Level != ERROR {
+		t.Errorf("incorrect Level: got %d, want %d", eventInfo.Level, ERROR)
 	}
-	if packet.Logger != "root" {
-		t.Errorf("incorrect Logger: got %s, want %s", packet.Logger, "root")
+	if eventInfo.Logger != "root" {
+		t.Errorf("incorrect Logger: got %s, want %s", eventInfo.Logger, "root")
 	}
-	if time.Time(packet.Timestamp).IsZero() {
+	if time.Time(eventInfo.Timestamp).IsZero() {
 		t.Error("Timestamp is zero")
 	}
-	if len(packet.EventID) != 32 {
-		t.Error("incorrect EventID:", packet.EventID)
+	if len(eventInfo.EventID) != 32 {
+		t.Error("incorrect EventID:", eventInfo.EventID)
 	}
 }
 

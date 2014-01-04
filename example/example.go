@@ -20,10 +20,10 @@ func main() {
 	httpReq, _ := http.NewRequest("GET", "http://example.com/foo?bar=true", nil)
 	httpReq.RemoteAddr = "127.0.0.1:80"
 	httpReq.Header = http.Header{"Content-Type": {"text/html"}, "Content-Length": {"42"}}
-	packet := &raven.Packet{Message: "Test report", Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
-	_, ch := client.Capture(packet, nil)
+	eventInfo := &raven.EventInfo{Message: "Test report", Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
+	_, ch := client.Capture(eventInfo, nil)
 	if err = <-ch; err != nil {
 		log.Fatal(err)
 	}
-	log.Print("sent packet successfully")
+	log.Print("sent event successfully")
 }
