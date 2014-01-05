@@ -9,12 +9,7 @@ type Writer struct {
 // Write formats the byte slice p into a string, and sends a message to
 // Sentry at the severity level indicated by the Writer w.
 func (w *Writer) Write(p []byte) (int, error) {
-	message := string(p)
-
-	eventInfo := NewEventInfo(message, &Message{message, nil})
-	eventInfo.Level = w.Level
-	eventInfo.Logger = w.Logger
-	w.Client.Capture(eventInfo, nil)
+	w.Client.CaptureMessage(string(p), &EventInfo{Level: w.Level, Logger: w.Logger})
 
 	return len(p), nil
 }

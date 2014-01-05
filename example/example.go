@@ -13,17 +13,20 @@ func trace() *raven.Stacktrace {
 }
 
 func main() {
-	client, err := raven.NewClient(os.Args[1], map[string]string{"foo": "bar"})
+	client, err := raven.NewClient(os.Args[1], &raven.EventInfo{Tags: []raven.Tag{raven.Tag{"foo", "bar"}}})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
+
 	httpReq, _ := http.NewRequest("GET", "http://example.com/foo?bar=true", nil)
 	httpReq.RemoteAddr = "127.0.0.1:80"
 	httpReq.Header = http.Header{"Content-Type": {"text/html"}, "Content-Length": {"42"}}
-	eventInfo := &raven.EventInfo{Message: "Test report", Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
-	_, ch := client.Capture(eventInfo, nil)
+
+	eventInfo := &raven.EventInfo{Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
+	eventID, ch := client.Capture("Test report", eventInfo)
 	if err = <-ch; err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
-	log.Print("sent event successfully")
+
+	log.Println("sent event successfully:", eventID)
 }
