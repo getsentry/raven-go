@@ -28,5 +28,5 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	log.Println("sent event successfully:", eventID)
+	log.Println("sent event successfully:", raven.FormatEventID(eventID))
 }

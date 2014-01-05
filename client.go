@@ -258,6 +258,11 @@ func uuid() (string, error) {
 	return hex.EncodeToString(id), nil
 }
 
+// FormatEventID formats and event ID into canonical UUID format for displaying to users.
+func FormatEventID(id string) string {
+	return id[:8] + "-" + id[8:12] + "-" + id[12:16] + "-" + id[16:20] + "-" + id[20:]
+}
+
 func (client *Client) worker() {
 	for event := range client.queue {
 		client.mu.RLock()
