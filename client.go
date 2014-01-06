@@ -188,7 +188,11 @@ var MaxQueueBuffer = 100
 // NewClient constructs a Sentry client and spawns a background goroutine to
 // handle packets sent by Client.Report.
 func NewClient(dsn string, tags map[string]string) (*Client, error) {
-	client := &Client{Transport: &HTTPTransport{}, Tags: tags, queue: make(chan *outgoingPacket, MaxQueueBuffer)}
+	client := &Client{Transport: &HTTPTransport{},
+		Tags:       tags,
+		Processors: []Processor{scrubTags, scrubExtra},
+		queue:      make(chan *outgoingPacket, MaxQueueBuffer),
+	}
 	go client.worker()
 	return client, client.SetDSN(dsn)
 }
@@ -197,9 +201,9 @@ func NewClient(dsn string, tags map[string]string) (*Client, error) {
 // by calling NewClient. Modification of fields concurrently with Send or after
 // calling Report for the first time is not thread-safe.
 type Client struct {
-	Tags map[string]string
-
-	Transport Transport
+	Tags       map[string]string
+	Processors []Processor
+	Transport  Transport
 
 	// DropHandler is called when a packet is dropped because the buffer is full.
 	DropHandler func(*Packet)
@@ -284,6 +288,10 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	if err != nil {
 		ch <- err
 		return
+	}
+
+	for _, processor := range client.Processors {
+		packet = processor(packet)
 	}
 
 	outgoingPacket := &outgoingPacket{packet, ch}
