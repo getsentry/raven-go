@@ -42,6 +42,7 @@ type EventInfo struct {
 }
 
 func (eventInfo *EventInfo) Merge(otherEventInfo *EventInfo) *EventInfo {
+	// Override
 	if otherEventInfo.Message != "" {
 		eventInfo.Message = otherEventInfo.Message
 	}
@@ -66,15 +67,16 @@ func (eventInfo *EventInfo) Merge(otherEventInfo *EventInfo) *EventInfo {
 	if otherEventInfo.Culprit != "" {
 		eventInfo.Culprit = otherEventInfo.Culprit
 	}
-	if otherEventInfo.Tags != nil {
-		eventInfo.Tags = append(eventInfo.Tags, otherEventInfo.Tags...)
-	}
 	if otherEventInfo.ServerName != "" {
 		eventInfo.ServerName = otherEventInfo.ServerName
 	}
-	if otherEventInfo.Modules != nil {
-		eventInfo.Modules = append(eventInfo.Modules, otherEventInfo.Modules...)
-	}
+
+	// Append
+	eventInfo.Tags = append(eventInfo.Tags, otherEventInfo.Tags...)
+	eventInfo.Modules = append(eventInfo.Modules, otherEventInfo.Modules...)
+	eventInfo.Interfaces = append(eventInfo.Interfaces, otherEventInfo.Interfaces...)
+
+	// Merge
 	for k, v := range otherEventInfo.Extra {
 		eventInfo.Extra[k] = v
 	}
