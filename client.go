@@ -85,7 +85,7 @@ type Packet struct {
 	// Optional
 	Platform   string                 `json:"platform,omitempty"`
 	Culprit    string                 `json:"culprit,omitempty"`
-	Tags       []Tag                  `json:"tags,omitempty"`
+	Tags       []*Tag                 `json:"tags,omitempty"`
 	ServerName string                 `json:"server_name,omitempty"`
 	Modules    []map[string]string    `json:"modules,omitempty"`
 	Extra      map[string]interface{} `json:"extra,omitempty"`
@@ -143,7 +143,7 @@ func (packet *Packet) Init(project string) error {
 
 func (packet *Packet) AddTags(tags map[string]string) {
 	for k, v := range tags {
-		packet.Tags = append(packet.Tags, Tag{k, v})
+		packet.Tags = append(packet.Tags, &Tag{k, v})
 	}
 }
 
