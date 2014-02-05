@@ -73,11 +73,3 @@ func TestSetDSN(t *testing.T) {
 		t.Error("incorrect authHeader:", client.authHeader)
 	}
 }
-
-func TestFormatUUID(t *testing.T) {
-	formatted := FormatUUID("f47ac10b58cc4372a5670e02b2c3d479")
-	expected := "f47ac10b-58cc-4372-a567-0e02b2c3d479"
-	if formatted != expected {
-		t.Errorf("incorrect uuid: expected %s, got %s", expected, formatted)
-	}
-}
