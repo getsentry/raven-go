@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -95,7 +96,17 @@ type Packet struct {
 
 // NewPacket constructs a packet with the specified message and interfaces.
 func NewPacket(message string, interfaces ...Interface) *Packet {
-	return &Packet{Message: message, Interfaces: interfaces, Extra: make(map[string]interface{})}
+	extra := map[string]interface{}{
+		"runtime.Version":      runtime.Version(),
+		"runtime.NumCPU":       runtime.NumCPU(),
+		"runtime.GOMAXPROCS":   runtime.GOMAXPROCS(0), // 0 just returns the current value
+		"runtime.NumGoroutine": runtime.NumGoroutine(),
+	}
+	return &Packet{
+		Message:    message,
+		Interfaces: interfaces,
+		Extra:      extra,
+	}
 }
 
 // Init initializes required fields in a packet. It is typically called by
@@ -125,6 +136,9 @@ func (packet *Packet) Init(project string) error {
 	}
 	if packet.ServerName == "" {
 		packet.ServerName = hostname
+	}
+	if packet.Platform == "" {
+		packet.Platform = "go"
 	}
 
 	if packet.Culprit == "" {
