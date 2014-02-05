@@ -22,17 +22,17 @@ import (
 
 const userAgent = "go-raven/1.0"
 
-type Severity int
+type Severity string
 
 var ErrPacketDropped = errors.New("raven: packet dropped")
 
 // http://docs.python.org/2/howto/logging.html#logging-levels
 const (
-	DEBUG Severity = (iota + 1) * 10
-	INFO
-	WARNING
-	ERROR
-	FATAL
+	DEBUG   Severity = "debug"
+	INFO             = "info"
+	WARNING          = "warning"
+	ERROR            = "error"
+	FATAL            = "fatal"
 )
 
 type Timestamp time.Time
@@ -117,7 +117,7 @@ func (packet *Packet) Init(project string) error {
 	if time.Time(packet.Timestamp).IsZero() {
 		packet.Timestamp = Timestamp(time.Now())
 	}
-	if packet.Level == 0 {
+	if packet.Level == "" {
 		packet.Level = ERROR
 	}
 	if packet.Logger == "" {
