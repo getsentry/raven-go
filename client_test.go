@@ -18,7 +18,7 @@ func TestPacketJSON(t *testing.T) {
 		Timestamp:  Timestamp(time.Date(2000, 01, 01, 0, 0, 0, 0, time.UTC)),
 		Level:      ERROR,
 		Logger:     "com.cupcake.raven-go.logger-test-packet-json",
-		Tags:       []Tag{Tag{"foo", "bar"}},
+		Tags:       []*Tag{&Tag{"foo", "bar"}},
 		Interfaces: []Interface{&Message{Message: "foo"}},
 	}
 
