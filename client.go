@@ -160,10 +160,6 @@ func uuid() (string, error) {
 	return hex.EncodeToString(id), nil
 }
 
-func FormatUUID(id string) string {
-	return id[:8] + "-" + id[8:12] + "-" + id[12:16] + "-" + id[16:20] + "-" + id[20:]
-}
-
 func (packet *Packet) JSON() []byte {
 	packetJSON, _ := json.Marshal(packet)
 
