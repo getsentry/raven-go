@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"github.com/cupcake/raven-go"
+	"github.com/getsentry/raven-go"
 	"log"
 	"net/http"
 	"os"
