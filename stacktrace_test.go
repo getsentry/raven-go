@@ -84,6 +84,12 @@ func trace() *Stacktrace {
 	// b
 }
 
+// TestNewStacktrace_outOfBounds verifies that a context exceeding the number
+// of lines in a file does not cause a panic.
+func TestNewStacktrace_outOfBounds(t *testing.T) {
+	NewStacktrace(0, 1000000, []string{thisPackage})
+}
+
 func derivePackage() (file, pack string) {
 	// Get file name by seeking caller's file name.
 	_, callerFile, _, ok := runtime.Caller(1)

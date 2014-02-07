@@ -153,6 +153,9 @@ func fileContext(filename string, line int, count int) [][]byte {
 		fileCache[filename] = lines
 	}
 	line-- // stack trace lines are 1-indexed
+	if (line < 0) {
+		line = 0
+	}
 	end := line + count
 	if line >= len(lines) {
 		return nil
