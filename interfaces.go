@@ -45,3 +45,19 @@ type Query struct {
 }
 
 func (q *Query) Class() string { return "sentry.interfaces.Query" }
+
+// http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Http
+type Request struct {
+	// Required
+	Url    string `json:"url"`
+	Method string `json:"method"`
+
+	// Optional
+	Data        map[string]interface{} `json:"data,omitempty"`
+	QueryString string                 `json:"query_string,omitempty"`
+	Cookies     string                 `json:"cookies,omitempty"`
+	Headers     map[string]string      `json:"headers,omitempty"`
+	Env         map[string]string      `json:"env,omitempty"`
+}
+
+func (r *Request) Class() string { return "sentry.interfaces.Http" }
