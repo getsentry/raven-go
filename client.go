@@ -371,6 +371,13 @@ func (client *Client) ProjectID() string {
 	return client.projectID
 }
 
+func (client *Client) URL() string {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+
+	return client.url
+}
+
 // HTTPTransport is the default transport, delivering packets to Sentry via the
 // HTTP API.
 type HTTPTransport struct {
