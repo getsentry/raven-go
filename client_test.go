@@ -1,6 +1,8 @@
 package raven
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -71,5 +73,20 @@ func TestSetDSN(t *testing.T) {
 	}
 	if client.authHeader != "Sentry sentry_version=4, sentry_key=u, sentry_secret=p" {
 		t.Error("incorrect authHeader:", client.authHeader)
+	}
+}
+
+func TestUnmarshalTag(t *testing.T) {
+	actual := new(Tag)
+	err := json.Unmarshal([]byte(`["foo","bar"]`), actual)
+
+	if err != nil {
+		t.Fatal("unable to decode JSON:", err)
+	}
+
+	expected := &Tag{Key: "foo", Value: "bar"}
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Errorf("incorrect Tag: wanted '%+v' and got '%+v'", expected, actual)
 	}
 }

@@ -71,6 +71,18 @@ func (tag *Tag) MarshalJSON() ([]byte, error) {
 	return json.Marshal([2]string{tag.Key, tag.Value})
 }
 
+func (tag *Tag) UnmarshalJSON(data []byte) error {
+	var tagArray [2]string
+
+	err := json.Unmarshal(data, &tagArray)
+	if err != nil {
+		return err
+	}
+
+	*tag = Tag{tagArray[0], tagArray[1]}
+	return nil
+}
+
 // http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
 type Packet struct {
 	// Required
