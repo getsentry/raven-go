@@ -114,3 +114,32 @@ func TestUnmarshalTags(t *testing.T) {
 		}
 	}
 }
+
+func TestMarshalTimestamp(t *testing.T) {
+	timestamp := Timestamp(time.Date(2000, 01, 02, 03, 04, 05, 0, time.UTC))
+	expected := `"2000-01-02T03:04:05"`
+
+	actual, err := json.Marshal(timestamp)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if string(actual) != expected {
+		t.Errorf("incorrect string; got %s, want %s", actual, expected)
+	}
+}
+
+func TestUnmarshalTimestamp(t *testing.T) {
+	timestamp := `"2000-01-02T03:04:05"`
+	expected := Timestamp(time.Date(2000, 01, 02, 03, 04, 05, 0, time.UTC))
+
+	var actual Timestamp
+	err := json.Unmarshal([]byte(timestamp), &actual)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if actual != expected {
+		t.Errorf("incorrect string; got %s, want %s", actual, expected)
+	}
+}

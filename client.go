@@ -21,7 +21,10 @@ import (
 	"time"
 )
 
-const userAgent = "go-raven/1.0"
+const (
+	userAgent       = "go-raven/1.0"
+	timestampFormat = `"2006-01-02T15:04:05"`
+)
 
 type Severity string
 
@@ -39,7 +42,17 @@ const (
 type Timestamp time.Time
 
 func (t Timestamp) MarshalJSON() ([]byte, error) {
-	return []byte(time.Time(t).UTC().Format(`"2006-01-02T15:04:05"`)), nil
+	return []byte(time.Time(t).UTC().Format(timestampFormat)), nil
+}
+
+func (timestamp *Timestamp) UnmarshalJSON(data []byte) error {
+	t, err := time.Parse(timestampFormat, string(data))
+	if err != nil {
+		return err
+	}
+
+	*timestamp = Timestamp(t)
+	return nil
 }
 
 // An Interface is a Sentry interface that will be serialized as JSON.
