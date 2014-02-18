@@ -10,3 +10,7 @@ before_install:
 script:
   - go test -race ./...
   - go test -cover ./...
+
+matrix:
+  allow_failures:
+    - go: tip
