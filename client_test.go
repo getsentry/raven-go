@@ -78,14 +78,11 @@ func TestSetDSN(t *testing.T) {
 
 func TestUnmarshalTag(t *testing.T) {
 	actual := new(Tag)
-	err := json.Unmarshal([]byte(`["foo","bar"]`), actual)
-
-	if err != nil {
+	if err := json.Unmarshal([]byte(`["foo","bar"]`), actual); err != nil {
 		t.Fatal("unable to decode JSON:", err)
 	}
 
 	expected := &Tag{Key: "foo", Value: "bar"}
-
 	if !reflect.DeepEqual(actual, expected) {
 		t.Errorf("incorrect Tag: wanted '%+v' and got '%+v'", expected, actual)
 	}
@@ -94,23 +91,21 @@ func TestUnmarshalTag(t *testing.T) {
 func TestUnmarshalTags(t *testing.T) {
 	tests := []struct {
 		Input    string
-		Expected *Tags
+		Expected Tags
 	}{
-		{`{"foo":"bar","bar":"baz"}`, &Tags{
-			Tag{Key: "foo", Value: "bar"},
-			Tag{Key: "bar", Value: "baz"},
-		}},
-		{`[["foo","bar"],["bar","baz"]]`, &Tags{
-			Tag{Key: "foo", Value: "bar"},
-			Tag{Key: "bar", Value: "baz"},
-		}},
+		{
+			`{"foo":"bar","bar":"baz"}`,
+			Tags{Tag{Key: "foo", Value: "bar"}, Tag{Key: "bar", Value: "baz"}},
+		},
+		{
+			`[["foo","bar"],["bar","baz"]]`,
+			Tags{Tag{Key: "foo", Value: "bar"}, Tag{Key: "bar", Value: "baz"}},
+		},
 	}
 
 	for _, test := range tests {
-		actual := new(Tags)
-		err := json.Unmarshal([]byte(test.Input), actual)
-
-		if err != nil {
+		var actual Tags
+		if err := json.Unmarshal([]byte(test.Input), &actual); err != nil {
 			t.Fatal("unable to decode JSON:", err)
 		}
 

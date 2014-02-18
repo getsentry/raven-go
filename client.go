@@ -73,48 +73,40 @@ func (tag *Tag) MarshalJSON() ([]byte, error) {
 	return json.Marshal([2]string{tag.Key, tag.Value})
 }
 
-func (tag *Tag) UnmarshalJSON(data []byte) error {
-	var tagArray [2]string
-
-	err := json.Unmarshal(data, &tagArray)
-	if err != nil {
+func (t *Tag) UnmarshalJSON(data []byte) error {
+	var tag [2]string
+	if err := json.Unmarshal(data, &tag); err != nil {
 		return err
 	}
-
-	*tag = Tag{tagArray[0], tagArray[1]}
+	*t = Tag{tag[0], tag[1]}
 	return nil
 }
 
-func (tags *Tags) UnmarshalJSON(data []byte) error {
-	var tagsArray []Tag
+func (t *Tags) UnmarshalJSON(data []byte) error {
+	var tags []Tag
 
 	switch data[0] {
 	case '[':
-		// Attempt to unmarshal into []Tag
-		err := json.Unmarshal(data, &tagsArray)
-		if err != nil {
+		// Unmarshal into []Tag
+		if err := json.Unmarshal(data, &tags); err != nil {
 			return err
 		}
-
 	case '{':
 		// Unmarshal into map[string]string
-		tagsMap := make(map[string]string)
-		err := json.Unmarshal(data, &tagsMap)
-
-		if err != nil {
+		tagMap := make(map[string]string)
+		if err := json.Unmarshal(data, &tagMap); err != nil {
 			return err
 		}
 
-		// convert to []Tag
-		for k, v := range tagsMap {
-			tagsArray = append(tagsArray, Tag{k, v})
+		// Convert to []Tag
+		for k, v := range tagMap {
+			tags = append(tags, Tag{k, v})
 		}
-
 	default:
-		return errors.New("unable to unmarshal JSON")
+		return errors.New("raven: unable to unmarshal JSON")
 	}
 
-	*tags = tagsArray
+	*t = tags
 	return nil
 }
 
