@@ -67,8 +67,55 @@ type Tag struct {
 	Value string
 }
 
+type Tags []Tag
+
 func (tag *Tag) MarshalJSON() ([]byte, error) {
 	return json.Marshal([2]string{tag.Key, tag.Value})
+}
+
+func (tag *Tag) UnmarshalJSON(data []byte) error {
+	var tagArray [2]string
+
+	err := json.Unmarshal(data, &tagArray)
+	if err != nil {
+		return err
+	}
+
+	*tag = Tag{tagArray[0], tagArray[1]}
+	return nil
+}
+
+func (tags *Tags) UnmarshalJSON(data []byte) error {
+	var tagsArray []Tag
+
+	switch data[0] {
+	case '[':
+		// Attempt to unmarshal into []Tag
+		err := json.Unmarshal(data, &tagsArray)
+		if err != nil {
+			return err
+		}
+
+	case '{':
+		// Unmarshal into map[string]string
+		tagsMap := make(map[string]string)
+		err := json.Unmarshal(data, &tagsMap)
+
+		if err != nil {
+			return err
+		}
+
+		// convert to []Tag
+		for k, v := range tagsMap {
+			tagsArray = append(tagsArray, Tag{k, v})
+		}
+
+	default:
+		return errors.New("unable to unmarshal JSON")
+	}
+
+	*tags = tagsArray
+	return nil
 }
 
 // http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
@@ -86,7 +133,7 @@ type Packet struct {
 	// Optional
 	Platform   string                 `json:"platform,omitempty"`
 	Culprit    string                 `json:"culprit,omitempty"`
-	Tags       []Tag                  `json:"tags,omitempty"`
+	Tags       Tags                   `json:"tags,omitempty"`
 	ServerName string                 `json:"server_name,omitempty"`
 	Modules    []map[string]string    `json:"modules,omitempty"`
 	Extra      map[string]interface{} `json:"extra,omitempty"`
