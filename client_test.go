@@ -90,3 +90,32 @@ func TestUnmarshalTag(t *testing.T) {
 		t.Errorf("incorrect Tag: wanted '%+v' and got '%+v'", expected, actual)
 	}
 }
+
+func TestUnmarshalTags(t *testing.T) {
+	tests := []struct {
+		Input    string
+		Expected *Tags
+	}{
+		{`{"foo":"bar","bar":"baz"}`, &Tags{
+			Tag{Key: "foo", Value: "bar"},
+			Tag{Key: "bar", Value: "baz"},
+		}},
+		{`[["foo","bar"],["bar","baz"]]`, &Tags{
+			Tag{Key: "foo", Value: "bar"},
+			Tag{Key: "bar", Value: "baz"},
+		}},
+	}
+
+	for _, test := range tests {
+		actual := new(Tags)
+		err := json.Unmarshal([]byte(test.Input), actual)
+
+		if err != nil {
+			t.Fatal("unable to decode JSON:", err)
+		}
+
+		if !reflect.DeepEqual(actual, test.Expected) {
+			t.Errorf("incorrect Tags: wanted '%+v' and got '%+v'", test.Expected, actual)
+		}
+	}
+}
