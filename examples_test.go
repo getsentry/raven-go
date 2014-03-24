@@ -1,11 +1,9 @@
 package raven
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"log"
-	"os"
 )
 
 func Example() {
