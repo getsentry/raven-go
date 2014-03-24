@@ -28,20 +28,3 @@ func Example() {
 	message := fmt.Sprintf("Captured error with id %s: %q", eventID, raisedErr)
 	log.Println(message)
 }
-
-func ExamplePacket() {
-	// os.Args[1] is sentry DSN string
-	client, err := NewClient(os.Args[1], map[string]string{"foo": "bar"})
-	if err != nil {
-		log.Fatal(err)
-	}
-	req, _ := http.NewRequest("GET", "http://example.com/foo?bar=true", nil)
-	req.RemoteAddr = "127.0.0.1:80"
-	req.Header = http.Header{"Content-Type": {"text/html"}, "Content-Length": {"42"}}
-	packet := &Packet{Message: "Test report", Interfaces: []Interface{NewException(errors.New("example"), trace()), NewHttp(req)}}
-	_, ch := client.Capture(packet, nil)
-	if err = <-ch; err != nil {
-		log.Fatal(err)
-	}
-	log.Print("sent packet successfully")
-}
