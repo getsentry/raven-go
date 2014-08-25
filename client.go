@@ -263,6 +263,9 @@ type Client struct {
 
 	Transport Transport
 
+	// ErrorHandler is called when a packer can't be sent due a network error.
+	ErrorHandler func(*Packet)
+
 	// DropHandler is called when a packet is dropped because the buffer is full.
 	DropHandler func(*Packet)
 
@@ -319,7 +322,11 @@ func (client *Client) worker() {
 		url, authHeader := client.url, client.authHeader
 		client.mu.RUnlock()
 
-		outgoingPacket.ch <- client.Transport.Send(url, authHeader, outgoingPacket.packet)
+		err := client.Transport.Send(url, authHeader, outgoingPacket.packet)
+		if err != nil && client.ErrorHandler != nil {
+			client.ErrorHandler(outgoingPacket.packet)
+		}
+		outgoingPacket.ch <- err
 	}
 }
 
