@@ -263,10 +263,11 @@ type Client struct {
 
 	Transport Transport
 
-	// ErrorHandler is called when a packer can't be sent due a network error.
-	ErrorHandler func(*Packet)
+	// ErrorHandler is called when a packet could not be delivered.
+	ErrorHandler func(*Packet, error)
 
-	// DropHandler is called when a packet is dropped because the buffer is full.
+	// DEPRECATED, DropHandler is called when a packet is dropped because the buffer is full.
+	// kept for backcompatibility
 	DropHandler func(*Packet)
 
 	mu         sync.RWMutex
@@ -324,7 +325,7 @@ func (client *Client) worker() {
 
 		err := client.Transport.Send(url, authHeader, outgoingPacket.packet)
 		if err != nil && client.ErrorHandler != nil {
-			client.ErrorHandler(outgoingPacket.packet)
+			client.ErrorHandler(outgoingPacket.packet, err)
 		}
 		outgoingPacket.ch <- err
 	}
@@ -363,6 +364,9 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 		// Send would block, drop the packet
 		if client.DropHandler != nil {
 			client.DropHandler(packet)
+		}
+		if client.ErrorHandler != nil {
+			client.ErrorHandler(packet, ErrPacketDropped)
 		}
 		ch <- ErrPacketDropped
 	}
