@@ -433,7 +433,7 @@ func (client *Client) URL() string {
 // HTTPTransport is the default transport, delivering packets to Sentry via the
 // HTTP API.
 type HTTPTransport struct {
-	http http.Client
+	Http http.Client
 }
 
 func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
@@ -446,7 +446,7 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", contentType)
-	res, err := t.http.Do(req)
+	res, err := t.Http.Do(req)
 	if err != nil {
 		return err
 	}
