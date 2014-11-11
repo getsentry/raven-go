@@ -391,6 +391,7 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
 func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) {
 	if client == nil {
+		f()
 		return
 	}
 
