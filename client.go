@@ -164,9 +164,6 @@ func NewPacket(message string, interfaces ...Interface) *Packet {
 // Init initializes required fields in a packet. It is typically called by
 // Client.Send/Report automatically.
 func (packet *Packet) Init(project string) error {
-	if packet.Message == "" {
-		return errors.New("raven: empty message")
-	}
 	if packet.Project == "" {
 		packet.Project = project
 	}
