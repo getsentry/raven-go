@@ -119,7 +119,7 @@ func (client *Client) SetDSN(dsn string) error {
 // Capture asynchronously delivers an Event to the Sentry server. It is a no-op
 // when client is nil. A channel is provided if it is important to check for a
 // send's success.
-func (client *Client) Capture(message string, event *Event) (eventID string, ch chan error) {
+func (client *Client) Capture(event *Event) (eventID string, ch chan error) {
 	ch = make(chan error, 1)
 
 	if client == nil {
@@ -127,15 +127,13 @@ func (client *Client) Capture(message string, event *Event) (eventID string, ch 
 		return "", ch
 	}
 
-	if message == "" {
+	if event.Message == "" {
 		ch <- errors.New("raven: no message")
 		return "", ch
 	}
 
-	// Merge events together.
-	mergedEvent := &Event{Message: message}
-	mergedEvent.Merge(client.DefaultContext)
-	mergedEvent.Merge(event)
+	// Fill event with default context.
+	event.Fill(client.DefaultContext)
 
 	// Fetch the current client config.
 	client.mu.RLock()
@@ -143,14 +141,14 @@ func (client *Client) Capture(message string, event *Event) (eventID string, ch 
 	client.mu.RUnlock()
 
 	// Fill missing event fields with defaults.
-	mergedEvent.FillDefaults(project)
+	event.FillDefaults(project)
 
 	select {
-	case client.queue <- &queuedEvent{event: mergedEvent, url: url, authHeader: authHeader, ch: ch}:
+	case client.queue <- &queuedEvent{event: event, url: url, authHeader: authHeader, ch: ch}:
 	default:
 		// Send would block, drop the event.
 		if client.DropHandler != nil {
-			client.DropHandler(mergedEvent)
+			client.DropHandler(event)
 		}
 		ch <- ErrEventDropped
 	}
@@ -160,21 +158,25 @@ func (client *Client) Capture(message string, event *Event) (eventID string, ch 
 
 // CaptureMessage formats and delivers a string message to the Sentry server.
 func (client *Client) CaptureMessage(message string, captureContext *Event) string {
-	event := &Event{Interfaces: []Interface{&Message{message, nil}}}
-	event.Merge(captureContext)
-
-	eventID, _ := client.Capture(message, event)
+	event := &Event{Message: message}
+	event.Fill(captureContext)
+	eventID, _ := client.Capture(event)
 
 	return eventID
 }
 
-// CaptureErrors formats and delivers an errorto the Sentry server.
+// CaptureErrors formats and delivers an error to the Sentry server.
 // Adds a stacktrace to event, excluding the call to this method.
 func (client *Client) CaptureError(err error, captureContext *Event) string {
 	event := &Event{Interfaces: []Interface{NewException(err, NewStacktrace(1, 3, nil))}}
-	event.Merge(captureContext)
+	event.Fill(captureContext)
 
-	eventID, _ := client.Capture(err.Error(), event)
+	// If capture context didn't have a message, set one.
+	if event.Message == "" {
+		event.Message = err.Error()
+	}
+
+	eventID, _ := client.Capture(event)
 
 	return eventID
 }
@@ -197,8 +199,8 @@ func (client *Client) CapturePanic(f func(), captureContext *Event) {
 			err = fmt.Errorf("%v", rval)
 		}
 
-		event := &Event{Interfaces: []Interface{NewException(err, NewStacktrace(2, NumContextLines, nil))}}
-		client.Capture(err.Error(), event)
+		event := &Event{Message: err.Error(), Interfaces: []Interface{NewException(err, NewStacktrace(2, NumContextLines, nil))}}
+		client.Capture(event)
 	}()
 
 	f()

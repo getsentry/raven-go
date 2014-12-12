@@ -46,33 +46,36 @@ type Event struct {
 	Interfaces []Interface `json:"-"`
 }
 
-func (event *Event) Merge(otherEvent *Event) *Event {
-	// Override
-	if otherEvent.Message != "" {
+// Fill sets unset fields to field values from otherEvent.
+//
+// Lists are merged.
+func (event *Event) Fill(otherEvent *Event) {
+	// Fill unset fields.
+	if event.Message == "" {
 		event.Message = otherEvent.Message
 	}
-	if otherEvent.EventID != "" {
+	if event.EventID == "" {
 		event.EventID = otherEvent.EventID
 	}
-	if otherEvent.Project != "" {
+	if event.Project == "" {
 		event.Project = otherEvent.Project
 	}
-	if !time.Time(otherEvent.Timestamp).IsZero() {
+	if time.Time(event.Timestamp).IsZero() {
 		event.Timestamp = otherEvent.Timestamp
 	}
-	if otherEvent.Level != 0 {
+	if event.Level == 0 {
 		event.Level = otherEvent.Level
 	}
-	if otherEvent.Logger != "" {
+	if event.Logger == "" {
 		event.Logger = otherEvent.Logger
 	}
-	if otherEvent.Platform != "" {
+	if event.Platform == "" {
 		event.Platform = otherEvent.Platform
 	}
-	if otherEvent.Culprit != "" {
+	if event.Culprit == "" {
 		event.Culprit = otherEvent.Culprit
 	}
-	if otherEvent.ServerName != "" {
+	if event.ServerName == "" {
 		event.ServerName = otherEvent.ServerName
 	}
 
@@ -83,14 +86,26 @@ func (event *Event) Merge(otherEvent *Event) *Event {
 
 	// Merge
 	for k, v := range otherEvent.Extra {
-		event.Extra[k] = v
+		_, ok := event.Extra[k]
+		if !ok {
+			event.Extra[k] = v
+		}
 	}
-
-	return event
 }
 
+// FillDefaults sets unset fields to some defaults.
+//
+// All required fields are set.
 func (event *Event) FillDefaults(project string) error {
-	// Required fields.
+	defaultEvent := &Event{
+		Project: project,		// Required.
+		Level: ERROR,			// Required.
+		Logger: "root",			// Required.
+		ServerName: hostname,	// Nice to have.
+	}
+	event.Fill(defaultEvent)
+
+	// Get these required defaults lazily.
 	if event.EventID == "" {
 		uuid4, err := uuid()
 		if err != nil {
@@ -98,24 +113,11 @@ func (event *Event) FillDefaults(project string) error {
 		}
 		event.EventID = uuid4
 	}
-
-	if event.Project == "" {
-		event.Project = project
-	}
 	if time.Time(event.Timestamp).IsZero() {
 		event.Timestamp = Timestamp(time.Now())
 	}
-	if event.Level == 0 {
-		event.Level = ERROR
-	}
-	if event.Logger == "" {
-		event.Logger = "root"
-	}
 
-	// Nice to have, we can help.
-	if event.ServerName == "" {
-		event.ServerName = hostname
-	}
+	// Nice to have, also lazy.
 	if event.Culprit == "" {
 		for _, inter := range event.Interfaces {
 			if c, ok := inter.(Culpriter); ok {
