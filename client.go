@@ -2,13 +2,9 @@
 package raven
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -17,13 +13,16 @@ import (
 const (
 	userAgent = "go-raven/1.0" // Arbitrary (but conventional) string which identifies our client to Sentry.
 
-	MaxQueueBuffer  = 100 // The maximum number of packets that will be buffered waiting to be delivered.
+	MaxQueueBuffer  = 100 // The maximum number of events that will be buffered waiting to be delivered.
 	NumContextLines = 5   // Number of pre and post context lines for Capture* methods.
 )
 
 type Severity int
 
-var ErrEventDropped = errors.New("raven: event dropped")
+var (
+	ErrEventDropped        = errors.New("raven: event dropped")
+	ErrClientNotConfigured = errors.New("raven: client not configured")
+)
 
 // http://docs.python.org/2/howto/logging.html#logging-levels
 const (
@@ -55,24 +54,24 @@ type Culpriter interface {
 // by calling NewClient. Modification of fields concurrently with Send or after
 // calling Report for the first time is not thread-safe.
 type Client struct {
-	DefaultEventInfo *EventInfo
+	DefaultContext *Event
 
 	Transport Transport
 
 	// DropHandler is called when an event is dropped because the buffer is full.
-	DropHandler func(*EventInfo)
+	DropHandler func(*Event)
 
 	mu         sync.RWMutex
 	url        string
 	projectID  string
 	authHeader string
-	queue      chan *event
+	queue      chan *queuedEvent
 }
 
 // NewClient constructs a Sentry client and spawns a background goroutine to
-// handle packets sent by Client.Report.
-func NewClient(dsn string, defaultEventInfo *EventInfo) (*Client, error) {
-	client := &Client{Transport: &HTTPTransport{}, DefaultEventInfo: defaultEventInfo, queue: make(chan *event, MaxQueueBuffer)}
+// handle events sent by Client.Report.
+func NewClient(dsn string, defaultContext *Event) (*Client, error) {
+	client := &Client{Transport: &HTTPTransport{}, DefaultContext: defaultContext, queue: make(chan *queuedEvent, MaxQueueBuffer)}
 	go client.worker()
 	return client, client.SetDSN(dsn)
 }
@@ -117,29 +116,41 @@ func (client *Client) SetDSN(dsn string) error {
 	return nil
 }
 
-// Capture asynchronously delivers a eventInfo to the Sentry server. It is a no-op
+// Capture asynchronously delivers an Event to the Sentry server. It is a no-op
 // when client is nil. A channel is provided if it is important to check for a
 // send's success.
-func (client *Client) Capture(message string, eventInfo *EventInfo) (eventID string, ch chan error) {
+func (client *Client) Capture(message string, event *Event) (eventID string, ch chan error) {
 	ch = make(chan error, 1)
 
 	if client == nil {
-		ch <- errors.New("raven: client not configured")
-		return
+		ch <- ErrClientNotConfigured
+		return "", ch
 	}
 
-	event, err := client.newEvent(message, eventInfo, ch)
-	if err != nil {
-		ch <- err
-		return
+	if message == "" {
+		ch <- errors.New("raven: no message")
+		return "", ch
 	}
+
+	// Merge events together.
+	mergedEvent := &Event{Message: message}
+	mergedEvent.Merge(client.DefaultContext)
+	mergedEvent.Merge(event)
+
+	// Fetch the current client config.
+	client.mu.RLock()
+	project, url, authHeader := client.projectID, client.url, client.authHeader
+	client.mu.RUnlock()
+
+	// Fill missing event fields with defaults.
+	mergedEvent.FillDefaults(project)
 
 	select {
-	case client.queue <- event:
+	case client.queue <- &queuedEvent{event: mergedEvent, url: url, authHeader: authHeader, ch: ch}:
 	default:
-		// Send would block, drop the event
+		// Send would block, drop the event.
 		if client.DropHandler != nil {
-			client.DropHandler(event.EventInfo)
+			client.DropHandler(mergedEvent)
 		}
 		ch <- ErrEventDropped
 	}
@@ -148,28 +159,28 @@ func (client *Client) Capture(message string, eventInfo *EventInfo) (eventID str
 }
 
 // CaptureMessage formats and delivers a string message to the Sentry server.
-func (client *Client) CaptureMessage(message string, captureContext *EventInfo) string {
-	eventInfo := &EventInfo{Interfaces: []Interface{&Message{message, nil}}}
-	eventInfo.Merge(captureContext)
+func (client *Client) CaptureMessage(message string, captureContext *Event) string {
+	event := &Event{Interfaces: []Interface{&Message{message, nil}}}
+	event.Merge(captureContext)
 
-	eventID, _ := client.Capture(message, eventInfo)
+	eventID, _ := client.Capture(message, event)
 
 	return eventID
 }
 
 // CaptureErrors formats and delivers an errorto the Sentry server.
-// Adds a stacktrace to eventInfo, excluding the call to this method.
-func (client *Client) CaptureError(err error, captureContext *EventInfo) string {
-	eventInfo := &EventInfo{Interfaces: []Interface{NewException(err, NewStacktrace(1, 3, nil))}}
-	eventInfo.Merge(captureContext)
+// Adds a stacktrace to event, excluding the call to this method.
+func (client *Client) CaptureError(err error, captureContext *Event) string {
+	event := &Event{Interfaces: []Interface{NewException(err, NewStacktrace(1, 3, nil))}}
+	event.Merge(captureContext)
 
-	eventID, _ := client.Capture(err.Error(), eventInfo)
+	eventID, _ := client.Capture(err.Error(), event)
 
 	return eventID
 }
 
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
-func (client *Client) CapturePanic(f func(), captureContext *EventInfo) {
+func (client *Client) CapturePanic(f func(), captureContext *Event) {
 	defer func() {
 		rval := recover()
 		if rval == nil {
@@ -186,8 +197,8 @@ func (client *Client) CapturePanic(f func(), captureContext *EventInfo) {
 			err = fmt.Errorf("%v", rval)
 		}
 
-		eventInfo := &EventInfo{Interfaces: []Interface{NewException(err, NewStacktrace(2, NumContextLines, nil))}}
-		client.Capture(err.Error(), eventInfo)
+		event := &Event{Interfaces: []Interface{NewException(err, NewStacktrace(2, NumContextLines, nil))}}
+		client.Capture(err.Error(), event)
 	}()
 
 	f()
@@ -197,84 +208,24 @@ func (client *Client) Close() {
 	close(client.queue)
 }
 
-func (client *Client) newEvent(message string, eventInfo *EventInfo, ch chan error) (*event, error) {
-	if message == "" {
-		return nil, errors.New("raven: no message")
-	}
-
-	uuid4, err := uuid()
-	if err != nil {
-		return nil, err
-	}
-
-	client.mu.RLock()
-	projectID := client.projectID
-	client.mu.RUnlock()
-	if projectID == "" {
-		return nil, errors.New("raven: client not configured")
-	}
-
-	// Merge interfaces together
-	mergedInfo := &EventInfo{Message: message, EventID: uuid4, Project: projectID}
-	mergedInfo.Merge(client.DefaultEventInfo)
-	mergedInfo.Merge(eventInfo)
-
-	if time.Time(mergedInfo.Timestamp).IsZero() {
-		mergedInfo.Timestamp = Timestamp(time.Now())
-	}
-	if mergedInfo.Level == 0 {
-		mergedInfo.Level = ERROR
-	}
-	if mergedInfo.Logger == "" {
-		mergedInfo.Logger = "root"
-	}
-	if mergedInfo.ServerName == "" {
-		mergedInfo.ServerName = hostname
-	}
-	if mergedInfo.Culprit == "" {
-		for _, inter := range mergedInfo.Interfaces {
-			if c, ok := inter.(Culpriter); ok {
-				mergedInfo.Culprit = c.Culprit()
-				if mergedInfo.Culprit != "" {
-					break
-				}
-			}
-		}
-	}
-
-	return &event{mergedInfo, ch}, nil
-}
-
-func uuid() (string, error) {
-	id := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, id)
-	if err != nil {
-		return "", err
-	}
-	id[6] &= 0x0F // clear version
-	id[6] |= 0x40 // set version to 4 (random uuid)
-	id[8] &= 0x3F // clear variant
-	id[8] |= 0x80 // set to IETF variant
-	return hex.EncodeToString(id), nil
-}
-
 // FormatEventID formats and event ID into canonical UUID format for displaying to users.
 func FormatEventID(id string) string {
 	return id[:8] + "-" + id[8:12] + "-" + id[12:16] + "-" + id[16:20] + "-" + id[20:]
 }
 
-func (client *Client) worker() {
-	for event := range client.queue {
-		client.mu.RLock()
-		url, authHeader := client.url, client.authHeader
-		client.mu.RUnlock()
-
-		event.ch <- client.Transport.Send(url, authHeader, event.EventInfo)
-	}
+// queuedEvent represents an event to send on the worker goroutine.
+//
+// The URL and auth header are stored alongside the event since the event is initialized
+// with a project id that must match the URL and auth header.
+type queuedEvent struct {
+	event      *Event
+	url        string
+	authHeader string
+	ch         chan error
 }
 
-var hostname string
-
-func init() {
-	hostname, _ = os.Hostname()
+func (client *Client) worker() {
+	for event := range client.queue {
+		event.ch <- client.Transport.Send(event.url, event.authHeader, event.event)
+	}
 }

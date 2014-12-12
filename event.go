@@ -3,11 +3,16 @@ package raven
 import (
 	"bytes"
 	"compress/zlib"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"io"
+	"os"
 	"time"
 )
+
+var hostname string
 
 type Tag struct {
 	Key   string
@@ -19,11 +24,11 @@ func (tag *Tag) MarshalJSON() ([]byte, error) {
 }
 
 // http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
-type EventInfo struct {
+type Event struct {
 	// Required
 	Message string `json:"message"`
 
-	// Required, set automatically by Client.Send/Report via EventInfo.Init if blank
+	// Required, set automatically by Client.Capture via Event.FillDefaults if blank.
 	EventID   string    `json:"event_id"`
 	Project   string    `json:"project"`
 	Timestamp Timestamp `json:"timestamp"`
@@ -41,84 +46,141 @@ type EventInfo struct {
 	Interfaces []Interface `json:"-"`
 }
 
-func (eventInfo *EventInfo) Merge(otherEventInfo *EventInfo) *EventInfo {
+func (event *Event) Merge(otherEvent *Event) *Event {
 	// Override
-	if otherEventInfo.Message != "" {
-		eventInfo.Message = otherEventInfo.Message
+	if otherEvent.Message != "" {
+		event.Message = otherEvent.Message
 	}
-	if otherEventInfo.EventID != "" {
-		eventInfo.EventID = otherEventInfo.EventID
+	if otherEvent.EventID != "" {
+		event.EventID = otherEvent.EventID
 	}
-	if otherEventInfo.Project != "" {
-		eventInfo.Project = otherEventInfo.Project
+	if otherEvent.Project != "" {
+		event.Project = otherEvent.Project
 	}
-	if !time.Time(otherEventInfo.Timestamp).IsZero() {
-		eventInfo.Timestamp = otherEventInfo.Timestamp
+	if !time.Time(otherEvent.Timestamp).IsZero() {
+		event.Timestamp = otherEvent.Timestamp
 	}
-	if otherEventInfo.Level != 0 {
-		eventInfo.Level = otherEventInfo.Level
+	if otherEvent.Level != 0 {
+		event.Level = otherEvent.Level
 	}
-	if otherEventInfo.Logger != "" {
-		eventInfo.Logger = otherEventInfo.Logger
+	if otherEvent.Logger != "" {
+		event.Logger = otherEvent.Logger
 	}
-	if otherEventInfo.Platform != "" {
-		eventInfo.Platform = otherEventInfo.Platform
+	if otherEvent.Platform != "" {
+		event.Platform = otherEvent.Platform
 	}
-	if otherEventInfo.Culprit != "" {
-		eventInfo.Culprit = otherEventInfo.Culprit
+	if otherEvent.Culprit != "" {
+		event.Culprit = otherEvent.Culprit
 	}
-	if otherEventInfo.ServerName != "" {
-		eventInfo.ServerName = otherEventInfo.ServerName
+	if otherEvent.ServerName != "" {
+		event.ServerName = otherEvent.ServerName
 	}
 
 	// Append
-	eventInfo.Tags = append(eventInfo.Tags, otherEventInfo.Tags...)
-	eventInfo.Modules = append(eventInfo.Modules, otherEventInfo.Modules...)
-	eventInfo.Interfaces = append(eventInfo.Interfaces, otherEventInfo.Interfaces...)
+	event.Tags = append(event.Tags, otherEvent.Tags...)
+	event.Modules = append(event.Modules, otherEvent.Modules...)
+	event.Interfaces = append(event.Interfaces, otherEvent.Interfaces...)
 
 	// Merge
-	for k, v := range otherEventInfo.Extra {
-		eventInfo.Extra[k] = v
+	for k, v := range otherEvent.Extra {
+		event.Extra[k] = v
 	}
 
-	return eventInfo
+	return event
 }
 
-func (eventInfo *EventInfo) JSON() []byte {
-	eventInfoJSON, _ := json.Marshal(eventInfo)
+func (event *Event) FillDefaults(project string) error {
+	// Required fields.
+	if event.EventID == "" {
+		uuid4, err := uuid()
+		if err != nil {
+			return err
+		}
+		event.EventID = uuid4
+	}
 
-	interfaces := make(map[string]Interface, len(eventInfo.Interfaces))
-	for _, inter := range eventInfo.Interfaces {
+	if event.Project == "" {
+		event.Project = project
+	}
+	if time.Time(event.Timestamp).IsZero() {
+		event.Timestamp = Timestamp(time.Now())
+	}
+	if event.Level == 0 {
+		event.Level = ERROR
+	}
+	if event.Logger == "" {
+		event.Logger = "root"
+	}
+
+	// Nice to have, we can help.
+	if event.ServerName == "" {
+		event.ServerName = hostname
+	}
+	if event.Culprit == "" {
+		for _, inter := range event.Interfaces {
+			if c, ok := inter.(Culpriter); ok {
+				event.Culprit = c.Culprit()
+				if event.Culprit != "" {
+					break
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (event *Event) JSON() []byte {
+	eventJSON, _ := json.Marshal(event)
+
+	interfaces := make(map[string]Interface, len(event.Interfaces))
+	for _, inter := range event.Interfaces {
 		interfaces[inter.Class()] = inter
 	}
 
 	if len(interfaces) > 0 {
 		interfaceJSON, _ := json.Marshal(interfaces)
-		eventInfoJSON[len(eventInfoJSON)-1] = ','
-		eventInfoJSON = append(eventInfoJSON, interfaceJSON[1:]...)
+		eventJSON[len(eventJSON)-1] = ','
+		eventJSON = append(eventJSON, interfaceJSON[1:]...)
 	}
 
-	return eventInfoJSON
+	return eventJSON
 }
 
-func serializedPacket(eventInfo *EventInfo) (r io.Reader, contentType string) {
-	packetJSON := eventInfo.JSON()
+func init() {
+	hostname, _ = os.Hostname()
+}
 
-	// Only deflate/base64 the eventInfo if it is bigger than 1KB, as there is
+func uuid() (string, error) {
+	id := make([]byte, 16)
+	_, err := io.ReadFull(rand.Reader, id)
+	if err != nil {
+		return "", err
+	}
+
+	id[6] &= 0x0F // clear version
+	id[6] |= 0x40 // set version to 4 (random uuid)
+	id[8] &= 0x3F // clear variant
+	id[8] |= 0x80 // set to IETF variant
+
+	return hex.EncodeToString(id), nil
+}
+
+func (event *Event) serialize() (r io.Reader, contentType string) {
+	eventJSON := event.JSON()
+
+	// Only deflate/base64 the event if it is bigger than 1KB, as there is
 	// overhead.
-	if len(packetJSON) > 1000 {
+	if len(eventJSON) > 1000 {
 		buf := &bytes.Buffer{}
 		b64 := base64.NewEncoder(base64.StdEncoding, buf)
 		deflate, _ := zlib.NewWriterLevel(b64, zlib.BestCompression)
-		deflate.Write(packetJSON)
+		deflate.Write(eventJSON)
 		deflate.Close()
 		b64.Close()
+
 		return buf, "application/octet-stream"
 	}
-	return bytes.NewReader(packetJSON), "application/json"
-}
 
-type event struct {
-	*EventInfo
-	ch chan error
+	return bytes.NewReader(eventJSON), "application/json"
 }

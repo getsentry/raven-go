@@ -22,8 +22,8 @@ func main() {
 	httpReq.RemoteAddr = "127.0.0.1:80"
 	httpReq.Header = http.Header{"Content-Type": {"text/html"}, "Content-Length": {"42"}}
 
-	eventInfo := &raven.EventInfo{Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
-	eventID, ch := client.Capture("Test report", eventInfo)
+	event := &raven.EventInfo{Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
+	eventID, ch := client.Capture("Test report", event)
 	if err = <-ch; err != nil {
 		log.Fatalln(err)
 	}

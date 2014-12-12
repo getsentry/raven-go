@@ -8,7 +8,7 @@ import (
 )
 
 type Transport interface {
-	Send(url, authHeader string, eventInfo *EventInfo) error
+	Send(url, authHeader string, event *Event) error
 }
 
 // HTTPTransport is the default transport, delivering events to Sentry via the
@@ -17,12 +17,12 @@ type HTTPTransport struct {
 	http http.Client
 }
 
-func (t *HTTPTransport) Send(url, authHeader string, eventInfo *EventInfo) error {
+func (t *HTTPTransport) Send(url, authHeader string, event *Event) error {
 	if url == "" {
 		return nil
 	}
 
-	body, contentType := serializedPacket(eventInfo)
+	body, contentType := event.serialize()
 	req, _ := http.NewRequest("POST", url, body)
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
@@ -36,5 +36,6 @@ func (t *HTTPTransport) Send(url, authHeader string, eventInfo *EventInfo) error
 	if res.StatusCode != 200 {
 		return fmt.Errorf("raven: got http status %d", res.StatusCode)
 	}
+
 	return nil
 }
