@@ -15,7 +15,7 @@ var querySecretValues = []string{`/^(?:\d[ -]*?){13,16}$/`}
 func (client *Client) Scrub(packet *Packet) *Packet {
 
 	packet = defaultProcessor(packet)
-	for _, processor := range client.Config.Processors {
+	for _, processor := range *client.Config.Processors {
 		packet = processor(packet)
 	}
 	return packet
@@ -60,6 +60,8 @@ func scrubKeyValuePair(key, val string) string {
 // Check keys for sensitive data, matches list of substrings
 func keyIsSensitive(key string) (sensitive bool) {
 	for _, secretKey := range querySecretKeys {
+		// Make lower for case insensitive compare
+		key = strings.ToLower(key)
 		if strings.Contains(key, secretKey) {
 			return true
 		}

@@ -243,7 +243,7 @@ func (packet *Packet) JSON() []byte {
 type Processor func(packet *Packet) *Packet
 
 type ClientConfig struct {
-	Processors []Processor
+	Processors *[]Processor
 	Tags       map[string]string
 }
 
@@ -253,7 +253,7 @@ var MaxQueueBuffer = 100
 
 // NewClient constructs a Sentry client and spawns a background goroutine to
 // handle packets sent by Client.Report.
-func NewClient(dsn string, config ClientConfig) (*Client, error) {
+func NewClient(dsn string, config *ClientConfig) (*Client, error) {
 	client := &Client{
 		Config:    config,
 		Transport: &HTTPTransport{},
@@ -267,7 +267,7 @@ func NewClient(dsn string, config ClientConfig) (*Client, error) {
 // by calling NewClient. Modification of fields concurrently with Send or after
 // calling Report for the first time is not thread-safe.
 type Client struct {
-	Config ClientConfig
+	Config *ClientConfig
 
 	Transport Transport
 
