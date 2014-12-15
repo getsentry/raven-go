@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"github.com/thenewtricks/raven-go"
+	"github.com/getsentry/raven-go"
 	"log"
 	"net/http"
 	"os"
