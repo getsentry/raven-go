@@ -14,7 +14,7 @@ type Transport interface {
 // HTTPTransport is the default transport, delivering events to Sentry via the
 // HTTP API.
 type HTTPTransport struct {
-	http http.Client
+	Http http.Client
 }
 
 func (t *HTTPTransport) Send(url, authHeader string, event *Event) error {
@@ -27,7 +27,7 @@ func (t *HTTPTransport) Send(url, authHeader string, event *Event) error {
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", contentType)
-	res, err := t.http.Do(req)
+	res, err := t.Http.Do(req)
 	if err != nil {
 		return err
 	}

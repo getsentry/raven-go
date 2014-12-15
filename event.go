@@ -7,8 +7,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -19,8 +21,47 @@ type Tag struct {
 	Value string
 }
 
+type Tags []Tag
+
 func (tag *Tag) MarshalJSON() ([]byte, error) {
 	return json.Marshal([2]string{tag.Key, tag.Value})
+}
+
+func (t *Tag) UnmarshalJSON(data []byte) error {
+	var tag [2]string
+	if err := json.Unmarshal(data, &tag); err != nil {
+		return err
+	}
+	*t = Tag{tag[0], tag[1]}
+	return nil
+}
+
+func (t *Tags) UnmarshalJSON(data []byte) error {
+	var tags []Tag
+
+	switch data[0] {
+	case '[':
+		// Unmarshal into []Tag
+		if err := json.Unmarshal(data, &tags); err != nil {
+			return err
+		}
+	case '{':
+		// Unmarshal into map[string]string
+		tagMap := make(map[string]string)
+		if err := json.Unmarshal(data, &tagMap); err != nil {
+			return err
+		}
+
+		// Convert to []Tag
+		for k, v := range tagMap {
+			tags = append(tags, Tag{k, v})
+		}
+	default:
+		return errors.New("raven: unable to unmarshal JSON")
+	}
+
+	*t = tags
+	return nil
 }
 
 // http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
@@ -38,7 +79,7 @@ type Event struct {
 	// Optional
 	Platform   string                 `json:"platform,omitempty"`
 	Culprit    string                 `json:"culprit,omitempty"`
-	Tags       []Tag                  `json:"tags,omitempty"`
+	Tags       Tags                   `json:"tags,omitempty"`
 	ServerName string                 `json:"server_name,omitempty"`
 	Modules    []map[string]string    `json:"modules,omitempty"`
 	Extra      map[string]interface{} `json:"extra,omitempty"`
@@ -63,7 +104,7 @@ func (event *Event) Fill(otherEvent *Event) {
 	if time.Time(event.Timestamp).IsZero() {
 		event.Timestamp = otherEvent.Timestamp
 	}
-	if event.Level == 0 {
+	if event.Level == "" {
 		event.Level = otherEvent.Level
 	}
 	if event.Logger == "" {
@@ -88,6 +129,9 @@ func (event *Event) Fill(otherEvent *Event) {
 	for k, v := range otherEvent.Extra {
 		_, ok := event.Extra[k]
 		if !ok {
+			if event.Extra == nil {
+				event.Extra = make(map[string]interface{}, 1)
+			}
 			event.Extra[k] = v
 		}
 	}
@@ -98,10 +142,17 @@ func (event *Event) Fill(otherEvent *Event) {
 // All required fields are set.
 func (event *Event) FillDefaults(project string) error {
 	defaultEvent := &Event{
-		Project: project,		// Required.
-		Level: ERROR,			// Required.
-		Logger: "root",			// Required.
-		ServerName: hostname,	// Nice to have.
+		Project:    project,  // Required.
+		Level:      ERROR,    // Required.
+		Logger:     "root",   // Required.
+		Platform:   "go",     // Nice to have.
+		ServerName: hostname, // Nice to have.
+		Extra: map[string]interface{}{
+			"runtime.Version":      runtime.Version(),
+			"runtime.NumCPU":       runtime.NumCPU(),
+			"runtime.GOMAXPROCS":   runtime.GOMAXPROCS(0), // 0 just returns the current value
+			"runtime.NumGoroutine": runtime.NumGoroutine(),
+		},
 	}
 	event.Fill(defaultEvent)
 

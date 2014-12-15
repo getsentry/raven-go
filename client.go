@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	userAgent = "go-raven/1.0" // Arbitrary (but conventional) string which identifies our client to Sentry.
-
+	userAgent       = "go-raven/1.0" // Arbitrary (but conventional) string which identifies our client to Sentry.
+	timestampFormat = `"2006-01-02T15:04:05"`
 	MaxQueueBuffer  = 100 // The maximum number of events that will be buffered waiting to be delivered.
 	NumContextLines = 5   // Number of pre and post context lines for Capture* methods.
 )
 
-type Severity int
+type Severity string
 
 var (
 	ErrEventDropped        = errors.New("raven: event dropped")
@@ -26,17 +26,27 @@ var (
 
 // http://docs.python.org/2/howto/logging.html#logging-levels
 const (
-	DEBUG Severity = (iota + 1) * 10
-	INFO
-	WARNING
-	ERROR
-	FATAL
+	DEBUG   Severity = "debug"
+	INFO             = "info"
+	WARNING          = "warning"
+	ERROR            = "error"
+	FATAL            = "fatal"
 )
 
 type Timestamp time.Time
 
 func (t Timestamp) MarshalJSON() ([]byte, error) {
-	return []byte(time.Time(t).UTC().Format(`"2006-01-02T15:04:05"`)), nil
+	return []byte(time.Time(t).UTC().Format(timestampFormat)), nil
+}
+
+func (timestamp *Timestamp) UnmarshalJSON(data []byte) error {
+	t, err := time.Parse(timestampFormat, string(data))
+	if err != nil {
+		return err
+	}
+
+	*timestamp = Timestamp(t)
+	return nil
 }
 
 // An Interface is a Sentry interface that will be serialized as JSON.
@@ -157,17 +167,17 @@ func (client *Client) Capture(event *Event) (eventID string, ch chan error) {
 }
 
 // CaptureMessage formats and delivers a string message to the Sentry server.
-func (client *Client) CaptureMessage(message string, captureContext *Event) string {
+func (client *Client) CaptureMessage(message string, captureContext *Event) (string, chan error) {
 	event := &Event{Message: message}
 	event.Fill(captureContext)
-	eventID, _ := client.Capture(event)
+	eventID, ch := client.Capture(event)
 
-	return eventID
+	return eventID, ch
 }
 
 // CaptureErrors formats and delivers an error to the Sentry server.
 // Adds a stacktrace to event, excluding the call to this method.
-func (client *Client) CaptureError(err error, captureContext *Event) string {
+func (client *Client) CaptureError(err error, captureContext *Event) (string, chan error) {
 	event := &Event{Interfaces: []Interface{NewException(err, NewStacktrace(1, 3, nil))}}
 	event.Fill(captureContext)
 
@@ -176,13 +186,17 @@ func (client *Client) CaptureError(err error, captureContext *Event) string {
 		event.Message = err.Error()
 	}
 
-	eventID, _ := client.Capture(event)
+	eventID, ch := client.Capture(event)
 
-	return eventID
+	return eventID, ch
 }
 
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
 func (client *Client) CapturePanic(f func(), captureContext *Event) {
+	if client == nil {
+		return
+	}
+
 	defer func() {
 		rval := recover()
 		if rval == nil {
@@ -210,9 +224,18 @@ func (client *Client) Close() {
 	close(client.queue)
 }
 
-// FormatEventID formats and event ID into canonical UUID format for displaying to users.
-func FormatEventID(id string) string {
-	return id[:8] + "-" + id[8:12] + "-" + id[12:16] + "-" + id[16:20] + "-" + id[20:]
+func (client *Client) ProjectID() string {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+
+	return client.projectID
+
+}
+func (client *Client) URL() string {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+
+	return client.url
 }
 
 // queuedEvent represents an event to send on the worker goroutine.

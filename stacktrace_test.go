@@ -121,3 +121,13 @@ func init() {
 		{100, "", ""},
 	}
 }
+
+// TestNewStacktrace_outOfBounds verifies that a context exceeding the number
+// of lines in a file does not cause a panic.
+func TestNewStacktrace_outOfBounds(t *testing.T) {
+	st := NewStacktrace(0, 1000000, []string{thisPackage})
+	f := st.Frames[len(st.Frames)-1]
+	if f.ContextLine != "\tst := NewStacktrace(0, 1000000, []string{thisPackage})" {
+		t.Errorf("incorrect ContextLine: %#v", f.ContextLine)
+	}
+}

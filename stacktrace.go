@@ -95,13 +95,13 @@ func NewStacktraceFrame(pc uintptr, file string, line, context int, appPackagePr
 	}
 
 	if context > 0 {
-		contextLines := fileContext(file, line-context, (context*2)+1)
+		contextLines, lineIdx := fileContext(file, line, context)
 		if len(contextLines) > 0 {
 			for i, line := range contextLines {
 				switch {
-				case i < context:
+				case i < lineIdx:
 					frame.PreContext = append(frame.PreContext, string(line))
-				case i == context:
+				case i == lineIdx:
 					frame.ContextLine = string(line)
 				default:
 					frame.PostContext = append(frame.PostContext, string(line))
@@ -109,7 +109,7 @@ func NewStacktraceFrame(pc uintptr, file string, line, context int, appPackagePr
 			}
 		}
 	} else if context == -1 {
-		contextLine := fileContext(file, line, 1)
+		contextLine, _ := fileContext(file, line, 0)
 		if len(contextLine) > 0 {
 			frame.ContextLine = string(contextLine[0])
 		}
@@ -140,27 +140,35 @@ func functionName(pc uintptr) (pack string, name string) {
 var fileCacheLock sync.Mutex
 var fileCache = make(map[string][][]byte)
 
-func fileContext(filename string, line int, count int) [][]byte {
+func fileContext(filename string, line, context int) ([][]byte, int) {
 	fileCacheLock.Lock()
 	defer fileCacheLock.Unlock()
 	lines, ok := fileCache[filename]
 	if !ok {
 		data, err := ioutil.ReadFile(filename)
 		if err != nil {
-			return nil
+			return nil, 0
 		}
 		lines = bytes.Split(data, []byte{'\n'})
 		fileCache[filename] = lines
 	}
 	line-- // stack trace lines are 1-indexed
-	end := line + count
+	start := line - context
+	var idx int
+	if start < 0 {
+		start = 0
+		idx = line
+	} else {
+		idx = context
+	}
+	end := line + context + 1
 	if line >= len(lines) {
-		return nil
+		return nil, 0
 	}
 	if end > len(lines) {
 		end = len(lines)
 	}
-	return lines[line:end]
+	return lines[start:end], idx
 }
 
 var trimPaths []string
