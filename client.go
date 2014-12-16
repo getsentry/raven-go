@@ -167,19 +167,23 @@ func (client *Client) Capture(event *Event) (eventID string, ch chan error) {
 }
 
 // CaptureMessage formats and delivers a string message to the Sentry server.
-func (client *Client) CaptureMessage(message string, captureContext *Context) (string, chan error) {
+//
+// Contexts to the right have higher priority than contexts on the left.
+func (client *Client) CaptureMessage(message string, contexts ...*Context) (string, chan error) {
 	event := &Event{Message: message}
-	event.Fill(captureContext)
+	event.Fill(contexts...)
 	eventID, ch := client.Capture(event)
 
 	return eventID, ch
 }
 
 // CaptureErrors formats and delivers an error to the Sentry server.
-// Adds a stacktrace to event, excluding the call to this method.
-func (client *Client) CaptureError(err error, captureContext *Context) (string, chan error) {
+//
+// Adds a stacktrace to event, excluding the call to this method. Contexts
+// to the right have higher priority than contexts on the left.
+func (client *Client) CaptureError(err error, contexts ...*Context) (string, chan error) {
 	event := &Event{Interfaces: []Interface{NewException(err, NewStacktrace(1, 3, nil))}}
-	event.Fill(captureContext)
+	event.Fill(contexts...)
 
 	// If capture context didn't have a message, set one.
 	if event.Message == "" {
@@ -192,7 +196,9 @@ func (client *Client) CaptureError(err error, captureContext *Context) (string, 
 }
 
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
-func (client *Client) CapturePanic(f func(), captureContext *Context) {
+//
+// Contexts to the right have higher priority than contexts on the left.
+func (client *Client) CapturePanic(f func(), contexts ...*Context) {
 	if client == nil {
 		return
 	}
@@ -214,6 +220,7 @@ func (client *Client) CapturePanic(f func(), captureContext *Context) {
 		}
 
 		event := &Event{Message: err.Error(), Interfaces: []Interface{NewException(err, NewStacktrace(2, NumContextLines, nil))}}
+		event.Fill(contexts...)
 		client.Capture(event)
 	}()
 

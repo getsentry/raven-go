@@ -40,52 +40,57 @@ type Event struct {
 	Interfaces []Interface `json:"-"`
 }
 
-// Fill sets unset fields to field values from context.
+// Fill sets unset fields to values from contexts.
 //
-// Lists are merged.
-func (event *Event) Fill(context *Context) {
-	// Fill unset fields.
-	if event.Message == "" {
-		event.Message = context.Message
-	}
-	if event.EventID == "" {
-		event.EventID = context.EventID
-	}
-	if event.Project == "" {
-		event.Project = context.Project
-	}
-	if time.Time(event.Timestamp).IsZero() {
-		event.Timestamp = context.Timestamp
-	}
-	if event.Level == "" {
-		event.Level = context.Level
-	}
-	if event.Logger == "" {
-		event.Logger = context.Logger
-	}
-	if event.Platform == "" {
-		event.Platform = context.Platform
-	}
-	if event.Culprit == "" {
-		event.Culprit = context.Culprit
-	}
-	if event.ServerName == "" {
-		event.ServerName = context.ServerName
-	}
+// List-like values are merged where possible. Where a single value must be
+// chosen, the event takes priority, and contexts increase in priority from
+// left to right.
+func (event *Event) Fill(contexts ...*Context) {
+	// Contexts to the right take priority, so start with those.
+	for i := len(contexts); i >= 0; i-- {
+		// Fill unset fields.
+		if event.Message == "" {
+			event.Message = contexts[i].Message
+		}
+		if event.EventID == "" {
+			event.EventID = contexts[i].EventID
+		}
+		if event.Project == "" {
+			event.Project = contexts[i].Project
+		}
+		if time.Time(event.Timestamp).IsZero() {
+			event.Timestamp = contexts[i].Timestamp
+		}
+		if event.Level == "" {
+			event.Level = contexts[i].Level
+		}
+		if event.Logger == "" {
+			event.Logger = contexts[i].Logger
+		}
+		if event.Platform == "" {
+			event.Platform = contexts[i].Platform
+		}
+		if event.Culprit == "" {
+			event.Culprit = contexts[i].Culprit
+		}
+		if event.ServerName == "" {
+			event.ServerName = contexts[i].ServerName
+		}
 
-	// Append
-	event.Tags = append(event.Tags, context.Tags...)
-	event.Modules = append(event.Modules, context.Modules...)
-	event.Interfaces = append(event.Interfaces, context.Interfaces...)
+		// Append
+		event.Tags = append(event.Tags, contexts[i].Tags...)
+		event.Modules = append(event.Modules, contexts[i].Modules...)
+		event.Interfaces = append(event.Interfaces, contexts[i].Interfaces...)
 
-	// Merge
-	for k, v := range context.Extra {
-		_, ok := event.Extra[k]
-		if !ok {
-			if event.Extra == nil {
-				event.Extra = make(map[string]interface{}, 1)
+		// Merge
+		for k, v := range contexts[i].Extra {
+			_, ok := event.Extra[k]
+			if !ok {
+				if event.Extra == nil {
+					event.Extra = make(map[string]interface{}, 1)
+				}
+				event.Extra[k] = v
 			}
-			event.Extra[k] = v
 		}
 	}
 }
