@@ -47,7 +47,7 @@ type Event struct {
 // left to right.
 func (event *Event) Fill(contexts ...*Context) {
 	// Contexts to the right take priority, so start with those.
-	for i := len(contexts); i >= 0; i-- {
+	for i := len(contexts) - 1; i >= 0; i-- {
 		// Fill unset fields.
 		if event.Message == "" {
 			event.Message = contexts[i].Message
