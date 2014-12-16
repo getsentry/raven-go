@@ -13,7 +13,7 @@ func trace() *raven.Stacktrace {
 }
 
 func main() {
-	client, err := raven.NewClient(os.Args[1], &raven.Event{Tags: []raven.Tag{raven.Tag{"foo", "bar"}}})
+	client, err := raven.NewClient(os.Args[1], &raven.Context{Tags: []raven.Tag{raven.Tag{"foo", "bar"}}})
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -22,8 +22,8 @@ func main() {
 	httpReq.RemoteAddr = "127.0.0.1:80"
 	httpReq.Header = http.Header{"Content-Type": {"text/html"}, "Content-Length": {"42"}}
 
-	event := &raven.Event{Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
-	eventID, ch := client.CaptureMessage("Test report", event)
+	context := &raven.Context{Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
+	eventID, ch := client.CaptureMessage("Test report", context)
 	if err = <-ch; err != nil {
 		log.Fatalln(err)
 	}

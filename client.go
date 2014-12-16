@@ -64,7 +64,7 @@ type Culpriter interface {
 // by calling NewClient. Modification of fields concurrently with Send or after
 // calling Report for the first time is not thread-safe.
 type Client struct {
-	DefaultContext *Event
+	DefaultContext *Context
 
 	Transport Transport
 
@@ -80,7 +80,7 @@ type Client struct {
 
 // NewClient constructs a Sentry client and spawns a background goroutine to
 // handle events sent by Client.Report.
-func NewClient(dsn string, defaultContext *Event) (*Client, error) {
+func NewClient(dsn string, defaultContext *Context) (*Client, error) {
 	client := &Client{Transport: &HTTPTransport{}, DefaultContext: defaultContext, queue: make(chan *queuedEvent, MaxQueueBuffer)}
 	go client.worker()
 	return client, client.SetDSN(dsn)
@@ -167,7 +167,7 @@ func (client *Client) Capture(event *Event) (eventID string, ch chan error) {
 }
 
 // CaptureMessage formats and delivers a string message to the Sentry server.
-func (client *Client) CaptureMessage(message string, captureContext *Event) (string, chan error) {
+func (client *Client) CaptureMessage(message string, captureContext *Context) (string, chan error) {
 	event := &Event{Message: message}
 	event.Fill(captureContext)
 	eventID, ch := client.Capture(event)
@@ -177,7 +177,7 @@ func (client *Client) CaptureMessage(message string, captureContext *Event) (str
 
 // CaptureErrors formats and delivers an error to the Sentry server.
 // Adds a stacktrace to event, excluding the call to this method.
-func (client *Client) CaptureError(err error, captureContext *Event) (string, chan error) {
+func (client *Client) CaptureError(err error, captureContext *Context) (string, chan error) {
 	event := &Event{Interfaces: []Interface{NewException(err, NewStacktrace(1, 3, nil))}}
 	event.Fill(captureContext)
 
@@ -192,7 +192,7 @@ func (client *Client) CaptureError(err error, captureContext *Event) (string, ch
 }
 
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
-func (client *Client) CapturePanic(f func(), captureContext *Event) {
+func (client *Client) CapturePanic(f func(), captureContext *Context) {
 	if client == nil {
 		return
 	}
@@ -229,8 +229,8 @@ func (client *Client) ProjectID() string {
 	defer client.mu.RUnlock()
 
 	return client.projectID
-
 }
+
 func (client *Client) URL() string {
 	client.mu.RLock()
 	defer client.mu.RUnlock()

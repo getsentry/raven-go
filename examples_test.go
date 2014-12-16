@@ -18,7 +18,7 @@ func Example() {
 		log.Fatal(err)
 	}
 	trace := NewStacktrace(0, 2, nil)
-	eventID, ch := client.CaptureError(raisedErr, &Event{
+	eventID, ch := client.CaptureError(raisedErr, &Context{
 		Interfaces: []Interface{NewException(raisedErr, trace), NewHttp(r)},
 	})
 	if err = <-ch; err != nil {

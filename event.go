@@ -14,7 +14,144 @@ import (
 	"time"
 )
 
-var hostname string
+// Context is an alias for Event. It helps with the readability of our Capture* methods.
+type Context Event
+
+// http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
+type Event struct {
+	// Required
+	Message string `json:"message"`
+
+	// Required, set automatically by Client.Capture via Event.FillDefaults if blank.
+	EventID   string    `json:"event_id"`
+	Project   string    `json:"project"`
+	Timestamp Timestamp `json:"timestamp"`
+	Level     Severity  `json:"level"`
+	Logger    string    `json:"logger"`
+
+	// Optional
+	Platform   string                 `json:"platform,omitempty"`
+	Culprit    string                 `json:"culprit,omitempty"`
+	Tags       Tags                   `json:"tags,omitempty"`
+	ServerName string                 `json:"server_name,omitempty"`
+	Modules    []map[string]string    `json:"modules,omitempty"`
+	Extra      map[string]interface{} `json:"extra,omitempty"`
+
+	Interfaces []Interface `json:"-"`
+}
+
+// Fill sets unset fields to field values from context.
+//
+// Lists are merged.
+func (event *Event) Fill(context *Context) {
+	// Fill unset fields.
+	if event.Message == "" {
+		event.Message = context.Message
+	}
+	if event.EventID == "" {
+		event.EventID = context.EventID
+	}
+	if event.Project == "" {
+		event.Project = context.Project
+	}
+	if time.Time(event.Timestamp).IsZero() {
+		event.Timestamp = context.Timestamp
+	}
+	if event.Level == "" {
+		event.Level = context.Level
+	}
+	if event.Logger == "" {
+		event.Logger = context.Logger
+	}
+	if event.Platform == "" {
+		event.Platform = context.Platform
+	}
+	if event.Culprit == "" {
+		event.Culprit = context.Culprit
+	}
+	if event.ServerName == "" {
+		event.ServerName = context.ServerName
+	}
+
+	// Append
+	event.Tags = append(event.Tags, context.Tags...)
+	event.Modules = append(event.Modules, context.Modules...)
+	event.Interfaces = append(event.Interfaces, context.Interfaces...)
+
+	// Merge
+	for k, v := range context.Extra {
+		_, ok := event.Extra[k]
+		if !ok {
+			if event.Extra == nil {
+				event.Extra = make(map[string]interface{}, 1)
+			}
+			event.Extra[k] = v
+		}
+	}
+}
+
+// FillDefaults sets unset fields to some defaults.
+//
+// All required fields are set.
+func (event *Event) FillDefaults(project string) error {
+	defaultContext := &Context{
+		Project:    project,  // Required.
+		Level:      ERROR,    // Required.
+		Logger:     "root",   // Required.
+		Platform:   "go",     // Nice to have.
+		ServerName: hostname, // Nice to have.
+		Extra: map[string]interface{}{
+			"runtime.Version":      runtime.Version(),
+			"runtime.NumCPU":       runtime.NumCPU(),
+			"runtime.GOMAXPROCS":   runtime.GOMAXPROCS(0), // 0 just returns the current value
+			"runtime.NumGoroutine": runtime.NumGoroutine(),
+		},
+	}
+	event.Fill(defaultContext)
+
+	// Get these required defaults lazily.
+	if event.EventID == "" {
+		uuid4, err := uuid()
+		if err != nil {
+			return err
+		}
+		event.EventID = uuid4
+	}
+	if time.Time(event.Timestamp).IsZero() {
+		event.Timestamp = Timestamp(time.Now())
+	}
+
+	// Nice to have, also lazy.
+	if event.Culprit == "" {
+		for _, inter := range event.Interfaces {
+			if c, ok := inter.(Culpriter); ok {
+				event.Culprit = c.Culprit()
+				if event.Culprit != "" {
+					break
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (event *Event) JSON() []byte {
+	eventJSON, _ := json.Marshal(event)
+
+	interfaces := make(map[string]Interface, len(event.Interfaces))
+	for _, inter := range event.Interfaces {
+		interfaces[inter.Class()] = inter
+	}
+
+	if len(interfaces) > 0 {
+		interfaceJSON, _ := json.Marshal(interfaces)
+		eventJSON[len(eventJSON)-1] = ','
+		eventJSON = append(eventJSON, interfaceJSON[1:]...)
+	}
+
+	return eventJSON
+}
 
 type Tag struct {
 	Key   string
@@ -64,141 +201,7 @@ func (t *Tags) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
-type Event struct {
-	// Required
-	Message string `json:"message"`
-
-	// Required, set automatically by Client.Capture via Event.FillDefaults if blank.
-	EventID   string    `json:"event_id"`
-	Project   string    `json:"project"`
-	Timestamp Timestamp `json:"timestamp"`
-	Level     Severity  `json:"level"`
-	Logger    string    `json:"logger"`
-
-	// Optional
-	Platform   string                 `json:"platform,omitempty"`
-	Culprit    string                 `json:"culprit,omitempty"`
-	Tags       Tags                   `json:"tags,omitempty"`
-	ServerName string                 `json:"server_name,omitempty"`
-	Modules    []map[string]string    `json:"modules,omitempty"`
-	Extra      map[string]interface{} `json:"extra,omitempty"`
-
-	Interfaces []Interface `json:"-"`
-}
-
-// Fill sets unset fields to field values from otherEvent.
-//
-// Lists are merged.
-func (event *Event) Fill(otherEvent *Event) {
-	// Fill unset fields.
-	if event.Message == "" {
-		event.Message = otherEvent.Message
-	}
-	if event.EventID == "" {
-		event.EventID = otherEvent.EventID
-	}
-	if event.Project == "" {
-		event.Project = otherEvent.Project
-	}
-	if time.Time(event.Timestamp).IsZero() {
-		event.Timestamp = otherEvent.Timestamp
-	}
-	if event.Level == "" {
-		event.Level = otherEvent.Level
-	}
-	if event.Logger == "" {
-		event.Logger = otherEvent.Logger
-	}
-	if event.Platform == "" {
-		event.Platform = otherEvent.Platform
-	}
-	if event.Culprit == "" {
-		event.Culprit = otherEvent.Culprit
-	}
-	if event.ServerName == "" {
-		event.ServerName = otherEvent.ServerName
-	}
-
-	// Append
-	event.Tags = append(event.Tags, otherEvent.Tags...)
-	event.Modules = append(event.Modules, otherEvent.Modules...)
-	event.Interfaces = append(event.Interfaces, otherEvent.Interfaces...)
-
-	// Merge
-	for k, v := range otherEvent.Extra {
-		_, ok := event.Extra[k]
-		if !ok {
-			if event.Extra == nil {
-				event.Extra = make(map[string]interface{}, 1)
-			}
-			event.Extra[k] = v
-		}
-	}
-}
-
-// FillDefaults sets unset fields to some defaults.
-//
-// All required fields are set.
-func (event *Event) FillDefaults(project string) error {
-	defaultEvent := &Event{
-		Project:    project,  // Required.
-		Level:      ERROR,    // Required.
-		Logger:     "root",   // Required.
-		Platform:   "go",     // Nice to have.
-		ServerName: hostname, // Nice to have.
-		Extra: map[string]interface{}{
-			"runtime.Version":      runtime.Version(),
-			"runtime.NumCPU":       runtime.NumCPU(),
-			"runtime.GOMAXPROCS":   runtime.GOMAXPROCS(0), // 0 just returns the current value
-			"runtime.NumGoroutine": runtime.NumGoroutine(),
-		},
-	}
-	event.Fill(defaultEvent)
-
-	// Get these required defaults lazily.
-	if event.EventID == "" {
-		uuid4, err := uuid()
-		if err != nil {
-			return err
-		}
-		event.EventID = uuid4
-	}
-	if time.Time(event.Timestamp).IsZero() {
-		event.Timestamp = Timestamp(time.Now())
-	}
-
-	// Nice to have, also lazy.
-	if event.Culprit == "" {
-		for _, inter := range event.Interfaces {
-			if c, ok := inter.(Culpriter); ok {
-				event.Culprit = c.Culprit()
-				if event.Culprit != "" {
-					break
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-func (event *Event) JSON() []byte {
-	eventJSON, _ := json.Marshal(event)
-
-	interfaces := make(map[string]Interface, len(event.Interfaces))
-	for _, inter := range event.Interfaces {
-		interfaces[inter.Class()] = inter
-	}
-
-	if len(interfaces) > 0 {
-		interfaceJSON, _ := json.Marshal(interfaces)
-		eventJSON[len(eventJSON)-1] = ','
-		eventJSON = append(eventJSON, interfaceJSON[1:]...)
-	}
-
-	return eventJSON
-}
+var hostname string
 
 func init() {
 	hostname, _ = os.Hostname()
