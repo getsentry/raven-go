@@ -23,10 +23,10 @@ func main() {
 	httpReq.Header = http.Header{"Content-Type": {"text/html"}, "Content-Length": {"42"}}
 
 	context := &raven.Context{Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
-	eventID, ch := client.CaptureMessage("Test report", context)
+	eventId, ch := client.CaptureMessage("Test report", context)
 	if err = <-ch; err != nil {
 		log.Fatalln(err)
 	}
 
-	log.Println("sent event successfully:", eventID)
+	log.Println("sent event successfully:", eventId)
 }

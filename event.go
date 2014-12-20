@@ -14,16 +14,71 @@ import (
 	"time"
 )
 
+// Severity identifies the severity of an event.
+type Severity string
+
+const (
+	Debug   Severity = "debug"   // Fine-grained events for normal execution, primarily useful for debugging.
+	Info             = "info"    // Coarse-grained events for normal execution.
+	Warning          = "warning" // Risk of abnormal execution in the future. For example, running low on disk space.
+	Error            = "error"   // Normal execution is not possible, but the application can continue to run.
+	Fatal            = "fatal"   // The application is not recoverable and cannot continue to run.
+)
+
+// Timestamp is a time.Time that correctly marshals to JSON for Sentry.
+type Timestamp time.Time
+
+// timestampFormat is the time.Time layout string used to generate Timestamp
+// JSON values for Sentry.
+const timestampFormat = `"2006-01-02T15:04:05"`
+
+// MarshalJSON marshals a Timestamp to JSON for Sentry.
+func (t Timestamp) MarshalJSON() ([]byte, error) {
+	return []byte(time.Time(t).UTC().Format(timestampFormat)), nil
+}
+
+// UnarshalJSON unmarshals a Timestamp from JSON for Sentry.
+func (timestamp *Timestamp) UnmarshalJSON(data []byte) error {
+	t, err := time.Parse(timestampFormat, string(data))
+	if err != nil {
+		return err
+	}
+
+	*timestamp = Timestamp(t)
+	return nil
+}
+
+// An Interface is a Sentry data interface for storing structured data. It can be
+// identified by its Class, and rendered in Sentry a particular way.
+//
+// An Interface must implement json.Marshaler or use json struct tags.
+//
+// Visit http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html
+// for more information about Interfaces in Sentry.
+type Interface interface {
+	// The Sentry class name. Example: sentry.interfaces.Stacktrace
+	Class() string
+}
+
+// A Culpriter is an Interface that can report which function caused the event.
+type Culpriter interface {
+	Interface
+	Culprit() string
+}
+
 // Context is an alias for Event. It helps with the readability of our Capture* methods.
 type Context Event
 
-// http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
+// An Event is the actual event data that gets sent to Sentry.
+//
+// Visit http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
+// for a discussion of its fields.
 type Event struct {
 	// Required
 	Message string `json:"message"`
 
 	// Required, set automatically by Client.Capture via Event.FillDefaults if blank.
-	EventID   string    `json:"event_id"`
+	EventId   string    `json:"event_id"`
 	Project   string    `json:"project"`
 	Timestamp Timestamp `json:"timestamp"`
 	Level     Severity  `json:"level"`
@@ -52,8 +107,8 @@ func (event *Event) Fill(contexts ...*Context) {
 		if event.Message == "" {
 			event.Message = contexts[i].Message
 		}
-		if event.EventID == "" {
-			event.EventID = contexts[i].EventID
+		if event.EventId == "" {
+			event.EventId = contexts[i].EventId
 		}
 		if event.Project == "" {
 			event.Project = contexts[i].Project
@@ -101,7 +156,7 @@ func (event *Event) Fill(contexts ...*Context) {
 func (event *Event) FillDefaults(project string) error {
 	defaultContext := &Context{
 		Project:    project,  // Required.
-		Level:      ERROR,    // Required.
+		Level:      Error,    // Required.
 		Logger:     "root",   // Required.
 		Platform:   "go",     // Nice to have.
 		ServerName: hostname, // Nice to have.
@@ -115,18 +170,18 @@ func (event *Event) FillDefaults(project string) error {
 	event.Fill(defaultContext)
 
 	// Get these required defaults lazily.
-	if event.EventID == "" {
+	if event.EventId == "" {
 		uuid4, err := uuid()
 		if err != nil {
 			return err
 		}
-		event.EventID = uuid4
+		event.EventId = uuid4
 	}
 	if time.Time(event.Timestamp).IsZero() {
 		event.Timestamp = Timestamp(time.Now())
 	}
 
-	// Nice to have, also lazy.
+	// If culprit is unset, assign a Culprit if possible.
 	if event.Culprit == "" {
 		for _, inter := range event.Interfaces {
 			if c, ok := inter.(Culpriter); ok {

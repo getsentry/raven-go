@@ -7,24 +7,23 @@ import (
 	"time"
 )
 
-type testInterface struct{}
-
-func (t *testInterface) Class() string   { return "sentry.interfaces.Test" }
-func (t *testInterface) Culprit() string { return "codez" }
-
-func TestEventJSON(t *testing.T) {
+// TestEvent_JSON validates an Event with most fields set serializes to correct JSON.
+func TestEvent_JSON(t *testing.T) {
 	event := &Event{
-		Project:    "1",
-		EventID:    "2",
 		Message:    "test",
+		EventId:    "2",
+		Project:    "1",
 		Timestamp:  Timestamp(time.Date(2000, 01, 01, 0, 0, 0, 0, time.UTC)),
-		Level:      ERROR,
-		Logger:     "com.getsentry.raven-go.logger-test-event-json",
+		Level:      Error,
+		Logger:     "com.getsentry.raven-go.test-logger",
+		Platform:   "go",
+		Culprit:    "TestEvent_JSON",
+		ServerName: "test.getsentry.com",
 		Tags:       []Tag{Tag{"foo", "bar"}, Tag{"foo", "foo"}, Tag{"baz", "buzz"}},
 		Interfaces: []Interface{&Message{Message: "foo"}},
 	}
 
-	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00","level":"error","logger":"com.getsentry.raven-go.logger-test-event-json","tags":[["foo","bar"],["foo","foo"],["baz","buzz"]],"sentry.interfaces.Message":{"message":"foo"}}`
+	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00","level":"error","logger":"com.getsentry.raven-go.test-logger","platform":"go","culprit":"TestEvent_JSON","tags":[["foo","bar"],["foo","foo"],["baz","buzz"]],"server_name":"test.getsentry.com","sentry.interfaces.Message":{"message":"foo"}}`
 	actual := string(event.JSON())
 
 	if actual != expected {
@@ -32,12 +31,14 @@ func TestEventJSON(t *testing.T) {
 	}
 }
 
-func TestFillEventDefaults(t *testing.T) {
+// TestEvent_FillDefaults verifies that all required and possible nice-to-have fields
+// get populated after Event.FillDefaults.
+func TestEvent_FillDefaults(t *testing.T) {
 	event := &Event{Message: "a", Interfaces: []Interface{&testInterface{}}}
 	event.FillDefaults("foo")
 
-	if len(event.EventID) != 32 {
-		t.Error("incorrect EventID:", event.EventID)
+	if len(event.EventId) != 32 {
+		t.Error("incorrect EventId:", event.EventId)
 	}
 	if event.Project != "foo" {
 		t.Error("incorrect Project:", event.Project)
@@ -45,8 +46,8 @@ func TestFillEventDefaults(t *testing.T) {
 	if time.Time(event.Timestamp).IsZero() {
 		t.Error("Timestamp is zero")
 	}
-	if event.Level != ERROR {
-		t.Errorf("incorrect Level: got %d, want %d", event.Level, ERROR)
+	if event.Level != Error {
+		t.Errorf("incorrect Level: got %d, want %d", event.Level, Error)
 	}
 	if event.Logger != "root" {
 		t.Errorf("incorrect Logger: got %s, want %s", event.Logger, "root")
@@ -59,22 +60,7 @@ func TestFillEventDefaults(t *testing.T) {
 	}
 }
 
-func TestSetDSN(t *testing.T) {
-	client := &Client{}
-	client.SetDSN("https://u:p@example.com/sentry/1")
-
-	if client.url != "https://example.com/sentry/api/1/store/" {
-		t.Error("incorrect url:", client.url)
-	}
-	if client.projectID != "1" {
-		t.Error("incorrect projectID:", client.projectID)
-	}
-	if client.authHeader != "Sentry sentry_version=4, sentry_key=u, sentry_secret=p" {
-		t.Error("incorrect authHeader:", client.authHeader)
-	}
-}
-
-func TestUnmarshalTag(t *testing.T) {
+func TestTag_UnmarshalJSON(t *testing.T) {
 	actual := new(Tag)
 	if err := json.Unmarshal([]byte(`["foo","bar"]`), actual); err != nil {
 		t.Fatal("unable to decode JSON:", err)
@@ -86,7 +72,7 @@ func TestUnmarshalTag(t *testing.T) {
 	}
 }
 
-func TestUnmarshalTags(t *testing.T) {
+func TestTags_UnmarshalJSON(t *testing.T) {
 	tests := []struct {
 		Input    string
 		Expected Tags
@@ -113,7 +99,7 @@ func TestUnmarshalTags(t *testing.T) {
 	}
 }
 
-func TestMarshalTimestamp(t *testing.T) {
+func TestTimestamp_MarshalJSON(t *testing.T) {
 	timestamp := Timestamp(time.Date(2000, 01, 02, 03, 04, 05, 0, time.UTC))
 	expected := `"2000-01-02T03:04:05"`
 
@@ -127,7 +113,7 @@ func TestMarshalTimestamp(t *testing.T) {
 	}
 }
 
-func TestUnmarshalTimestamp(t *testing.T) {
+func TestTimestamp_UnmarshalJSON(t *testing.T) {
 	timestamp := `"2000-01-02T03:04:05"`
 	expected := Timestamp(time.Date(2000, 01, 02, 03, 04, 05, 0, time.UTC))
 

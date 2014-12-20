@@ -1,5 +1,7 @@
 package raven
 
+// Message is a Sentry Message interface.
+//
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Message
 type Message struct {
 	// Required
@@ -28,7 +30,7 @@ func (t *Template) Class() string { return "sentry.interfaces.Template" }
 
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.User
 type User struct {
-	ID       string `json:"id"`
+	Id       string `json:"id"`
 	Username string `json:"username,omitempty"`
 	Email    string `json:"email,omitempty"`
 }

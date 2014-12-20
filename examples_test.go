@@ -13,7 +13,7 @@ func Example() {
 	var sentryDSN string
 	// r is a request performed when error occured
 	var r *http.Request
-	client, err := NewClient(sentryDSN, nil)
+	client, err := NewClient(sentryDSN, ClientConfig{})
 	if err != nil {
 		log.Fatal(err)
 	}

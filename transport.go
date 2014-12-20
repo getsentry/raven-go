@@ -7,6 +7,9 @@ import (
 	"net/http"
 )
 
+// http://sentry.readthedocs.org/en/latest/developer/client/#authentication
+const UserAgent = "go-raven/1.0" // Conventional string which identifies our client to Sentry.
+
 type Transport interface {
 	Send(url, authHeader string, event *Event) error
 }
@@ -25,7 +28,7 @@ func (t *HTTPTransport) Send(url, authHeader string, event *Event) error {
 	body, contentType := event.serialize()
 	req, _ := http.NewRequest("POST", url, body)
 	req.Header.Set("X-Sentry-Auth", authHeader)
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Content-Type", contentType)
 	res, err := t.Http.Do(req)
 	if err != nil {
