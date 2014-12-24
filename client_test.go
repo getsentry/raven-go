@@ -24,7 +24,7 @@ func TestClient_SetDSN(t *testing.T) {
 // TestClient_finalizeEvent verifies that all required and possible nice-to-have fields
 // get populated after Event.FillDefaults.
 func TestClient_finalizeEvent(t *testing.T) {
-	client := &Client{projectId: "foo"}
+	client := &Client{context: &Context{}, projectId: "foo"}
 	event := &Event{Message: "a", Interfaces: []Interface{&testInterface{}}}
 	client.finalizeEvent(event, nil)
 

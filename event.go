@@ -65,11 +65,8 @@ func (event *Event) JSON() []byte {
 func (event *Event) fill(contexts ...*Context) {
 	// Contexts to the right take priority, so start with those.
 	for i := len(contexts) - 1; i >= 0; i-- {
-		context := contexts[i]
-		if context == nil {
-			continue
-		}
 		// Fill unset fields.
+		context := contexts[i]
 		if event.Message == "" {
 			event.Message = context.Message
 		}
