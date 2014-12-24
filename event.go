@@ -39,7 +39,7 @@ type Event struct {
 	Interfaces []Interface `json:"-"`
 }
 
-// JSON serializes and Event into JSON.
+// JSON serializes an Event into JSON.
 func (event *Event) JSON() []byte {
 	eventJSON, _ := json.Marshal(event)
 
