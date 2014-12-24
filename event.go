@@ -39,9 +39,9 @@ type Event struct {
 	Interfaces []Interface `json:"-"`
 }
 
-// JSON serializes an Event into JSON.
-func (event *Event) JSON() []byte {
-	eventJSON, _ := json.Marshal(event)
+// json serializes an Event into JSON.
+func (event *Event) json() []byte {
+	eventJson, _ := json.Marshal(event)
 
 	interfaces := make(map[string]Interface, len(event.Interfaces))
 	for _, inter := range event.Interfaces {
@@ -49,12 +49,12 @@ func (event *Event) JSON() []byte {
 	}
 
 	if len(interfaces) > 0 {
-		interfaceJSON, _ := json.Marshal(interfaces)
-		eventJSON[len(eventJSON)-1] = ','
-		eventJSON = append(eventJSON, interfaceJSON[1:]...)
+		interfaceJson, _ := json.Marshal(interfaces)
+		eventJson[len(eventJson)-1] = ','
+		eventJson = append(eventJson, interfaceJson[1:]...)
 	}
 
-	return eventJSON
+	return eventJson
 }
 
 // fill sets unset fields to values from contexts.
@@ -115,22 +115,22 @@ func (event *Event) fill(contexts ...*Context) {
 
 // serialize serializes and optionally compresses an Event for transmission to Sentry.
 func (event *Event) serialize() (r io.Reader, contentType string) {
-	eventJSON := event.JSON()
+	eventJson := event.json()
 
 	// Only deflate/base64 the event if it is bigger than 1KB, as there is
 	// overhead.
-	if len(eventJSON) > 1000 {
+	if len(eventJson) > 1000 {
 		buf := &bytes.Buffer{}
 		b64 := base64.NewEncoder(base64.StdEncoding, buf)
 		deflate, _ := zlib.NewWriterLevel(b64, zlib.BestCompression)
-		deflate.Write(eventJSON)
+		deflate.Write(eventJson)
 		deflate.Close()
 		b64.Close()
 
 		return buf, "application/octet-stream"
 	}
 
-	return bytes.NewReader(eventJSON), "application/json"
+	return bytes.NewReader(eventJson), "application/json"
 }
 
 // Severity identifies the severity of an event.

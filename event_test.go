@@ -9,8 +9,8 @@ import (
 
 // TODO: TestEvent_Fill is unimplemented.
 
-// TestEvent_JSON validates an Event with most fields set serializes to correct JSON.
-func TestEvent_JSON(t *testing.T) {
+// TestEvent_json validates an Event with most fields set serializes to correct JSON.
+func TestEvent_json(t *testing.T) {
 	event := &Event{
 		Message:    "test",
 		EventId:    "2",
@@ -19,14 +19,14 @@ func TestEvent_JSON(t *testing.T) {
 		Level:      Error,
 		Logger:     "com.getsentry.raven-go.test-logger",
 		Platform:   "go",
-		Culprit:    "TestEvent_JSON",
+		Culprit:    "TestEvent_json",
 		ServerName: "test.getsentry.com",
 		Tags:       []Tag{Tag{"foo", "bar"}, Tag{"foo", "foo"}, Tag{"baz", "buzz"}},
 		Interfaces: []Interface{&Message{Message: "foo"}},
 	}
 
-	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00","level":"error","logger":"com.getsentry.raven-go.test-logger","platform":"go","culprit":"TestEvent_JSON","tags":[["foo","bar"],["foo","foo"],["baz","buzz"]],"server_name":"test.getsentry.com","sentry.interfaces.Message":{"message":"foo"}}`
-	actual := string(event.JSON())
+	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00","level":"error","logger":"com.getsentry.raven-go.test-logger","platform":"go","culprit":"TestEvent_json","tags":[["foo","bar"],["foo","foo"],["baz","buzz"]],"server_name":"test.getsentry.com","sentry.interfaces.Message":{"message":"foo"}}`
+	actual := string(event.json())
 
 	if actual != expected {
 		t.Errorf("incorrect json; got %s, want %s", actual, expected)
