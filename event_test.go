@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// TODO: TestEvent_Fill is unimplemented.
+
 // TestEvent_JSON validates an Event with most fields set serializes to correct JSON.
 func TestEvent_JSON(t *testing.T) {
 	event := &Event{
@@ -31,35 +33,7 @@ func TestEvent_JSON(t *testing.T) {
 	}
 }
 
-// TestEvent_FillDefaults verifies that all required and possible nice-to-have fields
-// get populated after Event.FillDefaults.
-func TestEvent_FillDefaults(t *testing.T) {
-	event := &Event{Message: "a", Interfaces: []Interface{&testInterface{}}}
-	event.FillDefaults("foo")
-
-	if len(event.EventId) != 32 {
-		t.Error("incorrect EventId:", event.EventId)
-	}
-	if event.Project != "foo" {
-		t.Error("incorrect Project:", event.Project)
-	}
-	if time.Time(event.Timestamp).IsZero() {
-		t.Error("Timestamp is zero")
-	}
-	if event.Level != Error {
-		t.Errorf("incorrect Level: got %d, want %d", event.Level, Error)
-	}
-	if event.Logger != "root" {
-		t.Errorf("incorrect Logger: got %s, want %s", event.Logger, "root")
-	}
-	if event.ServerName == "" {
-		t.Errorf("ServerName should not be empty")
-	}
-	if event.Culprit != "codez" {
-		t.Error("incorrect Culprit:", event.Culprit)
-	}
-}
-
+// TestTag_UnmarshalJSON validates tags deserialize from JSON properly.
 func TestTag_UnmarshalJSON(t *testing.T) {
 	actual := new(Tag)
 	if err := json.Unmarshal([]byte(`["foo","bar"]`), actual); err != nil {
@@ -72,6 +46,7 @@ func TestTag_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+// TestTags_UnmarshalJSON validates both kinds of tags deserialize from JSON properly.
 func TestTags_UnmarshalJSON(t *testing.T) {
 	tests := []struct {
 		Input    string
@@ -99,6 +74,8 @@ func TestTags_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+// TestTimestamp_MarshalJSON validates timestamps serialize into the type of timestamp
+// Sentry expects.
 func TestTimestamp_MarshalJSON(t *testing.T) {
 	timestamp := Timestamp(time.Date(2000, 01, 02, 03, 04, 05, 0, time.UTC))
 	expected := `"2000-01-02T03:04:05"`
@@ -113,6 +90,8 @@ func TestTimestamp_MarshalJSON(t *testing.T) {
 	}
 }
 
+// TestTimestamp_UnmarshalJSON validates Sentry timestamps can be deserialized into
+// a Timestamp.
 func TestTimestamp_UnmarshalJSON(t *testing.T) {
 	timestamp := `"2000-01-02T03:04:05"`
 	expected := Timestamp(time.Date(2000, 01, 02, 03, 04, 05, 0, time.UTC))
