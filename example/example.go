@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"github.com/getsentry/raven-go"
 	"log"
 	"net/http"
@@ -14,29 +13,20 @@ func trace() *raven.Stacktrace {
 }
 
 func main() {
-	client, err := raven.NewClient(os.Args[1], map[string]string{"foo": "bar"})
+	client, err := raven.NewClient(os.Args[1], &raven.Context{Tags: []raven.Tag{raven.Tag{"foo", "bar"}}})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
+
 	httpReq, _ := http.NewRequest("GET", "http://example.com/foo?bar=true", nil)
 	httpReq.RemoteAddr = "127.0.0.1:80"
 	httpReq.Header = http.Header{"Content-Type": {"text/html"}, "Content-Length": {"42"}}
-	packet := &raven.Packet{Message: "Test report", Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
-	_, ch := client.Capture(packet, nil)
-	if err = <-ch; err != nil {
-		log.Fatal(err)
-	}
-	log.Print("sent packet successfully")
-}
 
-// CheckError sends error report to sentry and records event id and error name to the logs
-func CheckError(err error, r *http.Request) {
-	client, err := raven.NewClient(os.Args[1], map[string]string{"foo": "bar"})
-	if err != nil {
-		log.Fatal(err)
+	context := &raven.Context{Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
+	eventId, ch := client.CaptureMessage("Test report", context)
+	if err = <-ch; err != nil {
+		log.Fatalln(err)
 	}
-	packet := raven.NewPacket(err.Error(), raven.NewException(err, trace()), raven.NewHttp(r))
-	eventID, _ := client.Capture(packet, nil)
-	message := fmt.Sprintf("Error event with id \"%s\" - %s", eventID, err.Error())
-	log.Println(message)
+
+	log.Println("sent event successfully:", eventId)
 }

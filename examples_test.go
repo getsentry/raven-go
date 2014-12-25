@@ -2,8 +2,8 @@ package raven
 
 import (
 	"fmt"
-	"net/http"
 	"log"
+	"net/http"
 )
 
 func Example() {
@@ -13,13 +13,14 @@ func Example() {
 	var sentryDSN string
 	// r is a request performed when error occured
 	var r *http.Request
-	client, err := NewClient(sentryDSN, nil)
+	client, err := NewClient(sentryDSN, ClientConfig{})
 	if err != nil {
 		log.Fatal(err)
 	}
 	trace := NewStacktrace(0, 2, nil)
-	packet := NewPacket(raisedErr.Error(), NewException(raisedErr, trace), NewHttp(r))
-	eventID, ch := client.Capture(packet, nil)
+	eventID, ch := client.CaptureError(raisedErr, &Context{
+		Interfaces: []Interface{NewException(raisedErr, trace), NewHttp(r)},
+	})
 	if err = <-ch; err != nil {
 		log.Fatal(err)
 	}

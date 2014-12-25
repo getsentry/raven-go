@@ -1,18 +1,11 @@
-// Package raven implements a client for the Sentry error logging service.
 package raven
 
 import (
-	"bytes"
-	"compress/zlib"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"net/http"
 	"net/url"
 	"os"
 	"runtime"
@@ -22,256 +15,59 @@ import (
 )
 
 const (
-	userAgent       = "go-raven/1.0"
-	timestampFormat = `"2006-01-02T15:04:05"`
+	EventQueueSize  = 100 // The maximum number of events that will be buffered waiting to be delivered.
+	NumContextLines = 5   // Number of pre- and post- context lines for Capture* methods.
 )
 
-type Severity string
-
-var ErrPacketDropped = errors.New("raven: packet dropped")
-
-// http://docs.python.org/2/howto/logging.html#logging-levels
-const (
-	DEBUG   Severity = "debug"
-	INFO             = "info"
-	WARNING          = "warning"
-	ERROR            = "error"
-	FATAL            = "fatal"
-)
-
-type Timestamp time.Time
-
-func (t Timestamp) MarshalJSON() ([]byte, error) {
-	return []byte(time.Time(t).UTC().Format(timestampFormat)), nil
-}
-
-func (timestamp *Timestamp) UnmarshalJSON(data []byte) error {
-	t, err := time.Parse(timestampFormat, string(data))
-	if err != nil {
-		return err
-	}
-
-	*timestamp = Timestamp(t)
-	return nil
-}
-
-// An Interface is a Sentry interface that will be serialized as JSON.
-// It must implement json.Marshaler or use json struct tags.
-type Interface interface {
-	// The Sentry class name. Example: sentry.interfaces.Stacktrace
-	Class() string
-}
-
-type Culpriter interface {
-	Culprit() string
-}
-
-type Transport interface {
-	Send(url, authHeader string, packet *Packet) error
-}
-
-type outgoingPacket struct {
-	packet *Packet
-	ch     chan error
-}
-
-type Tag struct {
-	Key   string
-	Value string
-}
-
-type Tags []Tag
-
-func (tag *Tag) MarshalJSON() ([]byte, error) {
-	return json.Marshal([2]string{tag.Key, tag.Value})
-}
-
-func (t *Tag) UnmarshalJSON(data []byte) error {
-	var tag [2]string
-	if err := json.Unmarshal(data, &tag); err != nil {
-		return err
-	}
-	*t = Tag{tag[0], tag[1]}
-	return nil
-}
-
-func (t *Tags) UnmarshalJSON(data []byte) error {
-	var tags []Tag
-
-	switch data[0] {
-	case '[':
-		// Unmarshal into []Tag
-		if err := json.Unmarshal(data, &tags); err != nil {
-			return err
-		}
-	case '{':
-		// Unmarshal into map[string]string
-		tagMap := make(map[string]string)
-		if err := json.Unmarshal(data, &tagMap); err != nil {
-			return err
-		}
-
-		// Convert to []Tag
-		for k, v := range tagMap {
-			tags = append(tags, Tag{k, v})
-		}
-	default:
-		return errors.New("raven: unable to unmarshal JSON")
-	}
-
-	*t = tags
-	return nil
-}
-
-// http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
-type Packet struct {
-	// Required
-	Message string `json:"message"`
-
-	// Required, set automatically by Client.Send/Report via Packet.Init if blank
-	EventID   string    `json:"event_id"`
-	Project   string    `json:"project"`
-	Timestamp Timestamp `json:"timestamp"`
-	Level     Severity  `json:"level"`
-	Logger    string    `json:"logger"`
-
-	// Optional
-	Platform   string                 `json:"platform,omitempty"`
-	Culprit    string                 `json:"culprit,omitempty"`
-	Tags       Tags                   `json:"tags,omitempty"`
-	ServerName string                 `json:"server_name,omitempty"`
-	Modules    []map[string]string    `json:"modules,omitempty"`
-	Extra      map[string]interface{} `json:"extra,omitempty"`
-
-	Interfaces []Interface `json:"-"`
-}
-
-// NewPacket constructs a packet with the specified message and interfaces.
-func NewPacket(message string, interfaces ...Interface) *Packet {
-	extra := map[string]interface{}{
-		"runtime.Version":      runtime.Version(),
-		"runtime.NumCPU":       runtime.NumCPU(),
-		"runtime.GOMAXPROCS":   runtime.GOMAXPROCS(0), // 0 just returns the current value
-		"runtime.NumGoroutine": runtime.NumGoroutine(),
-	}
-	return &Packet{
-		Message:    message,
-		Interfaces: interfaces,
-		Extra:      extra,
-	}
-}
-
-// Init initializes required fields in a packet. It is typically called by
-// Client.Send/Report automatically.
-func (packet *Packet) Init(project string) error {
-	if packet.Project == "" {
-		packet.Project = project
-	}
-	if packet.EventID == "" {
-		var err error
-		packet.EventID, err = uuid()
-		if err != nil {
-			return err
-		}
-	}
-	if time.Time(packet.Timestamp).IsZero() {
-		packet.Timestamp = Timestamp(time.Now())
-	}
-	if packet.Level == "" {
-		packet.Level = ERROR
-	}
-	if packet.Logger == "" {
-		packet.Logger = "root"
-	}
-	if packet.ServerName == "" {
-		packet.ServerName = hostname
-	}
-	if packet.Platform == "" {
-		packet.Platform = "go"
-	}
-
-	if packet.Culprit == "" {
-		for _, inter := range packet.Interfaces {
-			if c, ok := inter.(Culpriter); ok {
-				packet.Culprit = c.Culprit()
-				if packet.Culprit != "" {
-					break
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-func (packet *Packet) AddTags(tags map[string]string) {
-	for k, v := range tags {
-		packet.Tags = append(packet.Tags, Tag{k, v})
-	}
-}
-
-func uuid() (string, error) {
-	id := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, id)
-	if err != nil {
-		return "", err
-	}
-	id[6] &= 0x0F // clear version
-	id[6] |= 0x40 // set version to 4 (random uuid)
-	id[8] &= 0x3F // clear variant
-	id[8] |= 0x80 // set to IETF variant
-	return hex.EncodeToString(id), nil
-}
-
-func (packet *Packet) JSON() []byte {
-	packetJSON, _ := json.Marshal(packet)
-
-	interfaces := make(map[string]Interface, len(packet.Interfaces))
-	for _, inter := range packet.Interfaces {
-		interfaces[inter.Class()] = inter
-	}
-
-	if len(interfaces) > 0 {
-		interfaceJSON, _ := json.Marshal(interfaces)
-		packetJSON[len(packetJSON)-1] = ','
-		packetJSON = append(packetJSON, interfaceJSON[1:]...)
-	}
-
-	return packetJSON
-}
-
-// The maximum number of packets that will be buffered waiting to be delivered.
-// Packets will be dropped if the buffer is full. Used by NewClient.
-var MaxQueueBuffer = 100
-
-// NewClient constructs a Sentry client and spawns a background goroutine to
-// handle packets sent by Client.Report.
-func NewClient(dsn string, tags map[string]string) (*Client, error) {
-	client := &Client{Transport: &HTTPTransport{}, Tags: tags, queue: make(chan *outgoingPacket, MaxQueueBuffer)}
-	go client.worker()
-	return client, client.SetDSN(dsn)
-}
-
-// Client encapsulates a connection to a Sentry server. It must be initialized
-// by calling NewClient. Modification of fields concurrently with Send or after
-// calling Report for the first time is not thread-safe.
+// A Client is used to send events to a Sentry server. All Clients must be created
+// with NewClient.
 type Client struct {
-	Tags map[string]string
-
-	Transport Transport
-
-	// DropHandler is called when a packet is dropped because the buffer is full.
-	DropHandler func(*Packet)
+	context     *Context
+	transport   Transport
+	dropHandler func(*Event)
 
 	mu         sync.RWMutex
 	url        string
-	projectID  string
+	projectId  string
 	authHeader string
-	queue      chan *outgoingPacket
+
+	queue chan *queuedEvent
 }
 
-// SetDSN updates a client with a new DSN. It safe to call after and
-// concurrently with calls to Report and Send.
+// NewClient creates a Sentry Client. It is the caller's resposibility to call Close on
+// the Client when finished.
+//
+// All ClientConfig settings are optional. NewClient spawns a worker goroutine to handle
+// events sent by Client.Capture.
+func NewClient(dsn string, config ClientConfig) (*Client, error) {
+	var transport Transport
+	if config.Transport != nil {
+		transport = config.Transport
+	} else {
+		transport = &HTTPTransport{}
+	}
+
+	client := &Client{
+		context: &Context{
+			Level:      config.DefaultLevel,
+			Tags:       config.Tags,
+			ServerName: config.DefaultServerName,
+			Modules:    config.Modules,
+			Extra:      config.Extra,
+			Interfaces: config.Interfaces,
+		},
+		transport:   transport,
+		dropHandler: config.DropHandler,
+		queue:       make(chan *queuedEvent, EventQueueSize),
+	}
+
+	go client.worker()
+
+	return client, client.SetDSN(dsn)
+}
+
+// SetDSN updates a client with a new DSN. It safe to call before, after, and
+// concurrently with calls to the Capture methods.
 func (client *Client) SetDSN(dsn string) error {
 	if dsn == "" {
 		return nil
@@ -296,10 +92,10 @@ func (client *Client) SetDSN(dsn string) error {
 	uri.User = nil
 
 	if idx := strings.LastIndex(uri.Path, "/"); idx != -1 {
-		client.projectID = uri.Path[idx+1:]
-		uri.Path = uri.Path[:idx+1] + "api/" + client.projectID + "/store/"
+		client.projectId = uri.Path[idx+1:]
+		uri.Path = uri.Path[:idx+1] + "api/" + client.projectId + "/store/"
 	}
-	if client.projectID == "" {
+	if client.projectId == "" {
 		return errors.New("raven: dsn missing project id")
 	}
 
@@ -310,116 +106,70 @@ func (client *Client) SetDSN(dsn string) error {
 	return nil
 }
 
-func (client *Client) worker() {
-	for outgoingPacket := range client.queue {
-		client.mu.RLock()
-		url, authHeader := client.url, client.authHeader
-		client.mu.RUnlock()
+// CaptureMessage formats and asynchronously delivers a message event to the Sentry server.
+//
+// It is a no-op when client is nil. Contexts increase in priority from left to right.
+// An error channel is provided if it is important to receive a response from the Sentry
+// server.
+func (client *Client) CaptureMessage(message string, contexts ...*Context) (eventId string, ch chan error) {
+	event := &Event{Message: message}
+	event.fill(contexts...)
 
-		outgoingPacket.ch <- client.Transport.Send(url, authHeader, outgoingPacket.packet)
-	}
+	return client.capture(event)
 }
 
-// Capture asynchronously delivers a packet to the Sentry server. It is a no-op
-// when client is nil. A channel is provided if it is important to check for a
-// send's success.
-func (client *Client) Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
-	if client == nil {
-		return
+// CaptureError formats and asynchronously delivers an error event to the Sentry server.
+// CaptureError includes a stacktrace.
+//
+// It is a no-op when client is nil. Contexts increase in priority from left to right.
+// An error channel is provided if it is important to receive a response from the Sentry
+// server.
+func (client *Client) CaptureError(err error, contexts ...*Context) (string, chan error) {
+	event := &Event{Interfaces: []Interface{NewException(err, NewStacktrace(1, NumContextLines, nil))}}
+	event.fill(contexts...)
+
+	// If capture context didn't have a message, set one.
+	if event.Message == "" {
+		event.Message = err.Error()
 	}
 
-	ch = make(chan error, 1)
-
-	// Merge capture tags and client tags
-	packet.AddTags(captureTags)
-	packet.AddTags(client.Tags)
-
-	// Initialize any required packet fields
-	client.mu.RLock()
-	projectID := client.projectID
-	client.mu.RUnlock()
-
-	err := packet.Init(projectID)
-	if err != nil {
-		ch <- err
-		return
-	}
-
-	outgoingPacket := &outgoingPacket{packet, ch}
-
-	select {
-	case client.queue <- outgoingPacket:
-	default:
-		// Send would block, drop the packet
-		if client.DropHandler != nil {
-			client.DropHandler(packet)
-		}
-		ch <- ErrPacketDropped
-	}
-
-	return packet.EventID, ch
+	return client.capture(event)
 }
 
-// CaptureMessage formats and delivers a string message to the Sentry server.
-func (client *Client) CaptureMessage(message string, tags map[string]string, interfaces ...Interface) string {
-	if client == nil {
-		return ""
-	}
-
-	packet := NewPacket(message, append(interfaces, &Message{message, nil})...)
-	eventID, _ := client.Capture(packet, tags)
-
-	return eventID
-}
-
-// CaptureErrors formats and delivers an errorto the Sentry server.
-// Adds a stacktrace to the packet, excluding the call to this method.
-func (client *Client) CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
-	if client == nil {
-		return ""
-	}
-
-	packet := NewPacket(err.Error(), append(interfaces, NewException(err, NewStacktrace(1, 3, nil)))...)
-	eventID, _ := client.Capture(packet, tags)
-
-	return eventID
-}
-
-// CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
-func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) {
+// CapturePanic calls f and will recover and reports a panics to the Sentry server.
+//
+// If client is nil, f will still be called and panics will still be recovered from.
+// Contexts increase in priority from left to right.
+func (client *Client) CapturePanic(f func(), contexts ...*Context) {
 	if client == nil {
 		return
 	}
 
 	defer func() {
-		var packet *Packet
-		switch rval := recover().(type) {
-		case nil:
+		rval := recover()
+		if rval == nil {
 			return
-		case error:
-			packet = NewPacket(rval.Error(), append(interfaces, NewException(rval, NewStacktrace(2, 3, nil)))...)
-		default:
-			rvalStr := fmt.Sprint(rval)
-			packet = NewPacket(rvalStr, append(interfaces, NewException(errors.New(rvalStr), NewStacktrace(2, 3, nil)))...)
 		}
 
-		client.Capture(packet, tags)
+		var err error
+		switch rval := rval.(type) {
+		case error:
+			// If this is an error type, pass it on directly. This preserves error type.
+			err = rval
+		default:
+			// If recover is (non-conventionally) not an error, make it one.
+			err = fmt.Errorf("%v", rval)
+		}
+
+		event := &Event{Message: err.Error(), Interfaces: []Interface{NewException(err, NewStacktrace(2, NumContextLines, nil))}}
+		event.fill(contexts...)
+		client.capture(event)
 	}()
 
 	f()
 }
 
-func (client *Client) Close() {
-	close(client.queue)
-}
-
-func (client *Client) ProjectID() string {
-	client.mu.RLock()
-	defer client.mu.RUnlock()
-
-	return client.projectID
-}
-
+// URL is a thread-safe way to get the URL of the client.
 func (client *Client) URL() string {
 	client.mu.RLock()
 	defer client.mu.RUnlock()
@@ -427,53 +177,161 @@ func (client *Client) URL() string {
 	return client.url
 }
 
-// HTTPTransport is the default transport, delivering packets to Sentry via the
-// HTTP API.
-type HTTPTransport struct {
-	Http http.Client
+// ProjectId is a thread-safe way to get the project id of the client.
+func (client *Client) ProjectId() string {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+
+	return client.projectId
 }
 
-func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
-	if url == "" {
-		return nil
+// Close cleans up a client after it is no longer needed.
+//
+// The worker goroutine will stop.
+func (client *Client) Close() {
+	close(client.queue)
+}
+
+// capture asynchronously delivers an event to the Sentry server.
+//
+// It is a no-op when client is nil. An error channel is provided if it is
+// important to receive a response from the Sentry server.
+func (client *Client) capture(event *Event) (eventId string, ch chan error) {
+	ch = make(chan error, 1)
+
+	if client == nil {
+		ch <- errors.New("raven: client not configured")
+		return "", ch
 	}
 
-	body, contentType := serializedPacket(packet)
-	req, _ := http.NewRequest("POST", url, body)
-	req.Header.Set("X-Sentry-Auth", authHeader)
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Content-Type", contentType)
-	res, err := t.Http.Do(req)
+	if event.Message == "" {
+		ch <- errors.New("raven: no message")
+		return "", ch
+	}
+
+	// Fill the event with as many sensible defaults as possible, and get a queuedEvent.
+	queuedEvent, err := client.finalizeEvent(event, ch)
 	if err != nil {
-		return err
+		ch <- err
+		return "", ch
 	}
-	io.Copy(ioutil.Discard, res.Body)
-	res.Body.Close()
-	if res.StatusCode != 200 {
-		return fmt.Errorf("raven: got http status %d", res.StatusCode)
+
+	select {
+	case client.queue <- queuedEvent:
+	default:
+		// Send would block, drop the event.
+		if client.dropHandler != nil {
+			client.dropHandler(event)
+		}
+		ch <- errors.New("raven: event dropped")
 	}
-	return nil
+
+	return event.EventId, ch
 }
 
-func serializedPacket(packet *Packet) (r io.Reader, contentType string) {
-	packetJSON := packet.JSON()
+// finalizeEvent processes the event to fill as many sensible defaults as possible,
+// and prepares a queuedEvent with a hostname and authHeader matching event.Project.
+func (client *Client) finalizeEvent(event *Event, ch chan error) (*queuedEvent, error) {
+	// Fill missing event fields with client context.
+	event.fill(client.context)
 
-	// Only deflate/base64 the packet if it is bigger than 1KB, as there is
-	// overhead.
-	if len(packetJSON) > 1000 {
-		buf := &bytes.Buffer{}
-		b64 := base64.NewEncoder(base64.StdEncoding, buf)
-		deflate, _ := zlib.NewWriterLevel(b64, zlib.BestCompression)
-		deflate.Write(packetJSON)
-		deflate.Close()
-		b64.Close()
-		return buf, "application/octet-stream"
+	// Fill missing event fields with a sensible, timely default context.
+	client.mu.RLock()
+	project, url, authHeader := client.projectId, client.url, client.authHeader
+	client.mu.RUnlock()
+
+	eventId, err := uuid()
+	if err != nil {
+		return nil, err
 	}
-	return bytes.NewReader(packetJSON), "application/json"
+
+	event.fill(&Context{
+		EventId:    eventId,
+		Project:    project,
+		Timestamp:  Timestamp(time.Now()),
+		Level:      Error,
+		Logger:     "root",
+		Platform:   "go",
+		ServerName: hostname, // Global
+		Extra: map[string]interface{}{
+			"runtime.Version":      runtime.Version(),
+			"runtime.NumCPU":       runtime.NumCPU(),
+			"runtime.GOMAXPROCS":   runtime.GOMAXPROCS(0), // 0 just returns the current value
+			"runtime.NumGoroutine": runtime.NumGoroutine(),
+		},
+	})
+
+	// Attempt to derive a Culprit if Culprit is unset.
+	if event.Culprit == "" {
+		for _, inter := range event.Interfaces {
+			if c, ok := inter.(Culpriter); ok {
+				event.Culprit = c.Culprit()
+				if event.Culprit != "" {
+					break
+				}
+			}
+		}
+	}
+
+	return &queuedEvent{event: event, url: url, authHeader: authHeader, ch: ch}, nil
+}
+
+// worker receives queued events from the event queue and uses the transport to deliver them.
+//
+// Any unset required event fields are set.
+func (client *Client) worker() {
+	for e := range client.queue {
+		e.ch <- client.transport.Send(e.url, e.authHeader, e.event)
+	}
+}
+
+// uuid generates a UUIDv4 for a unique event id.
+func uuid() (string, error) {
+	id := make([]byte, 16)
+	_, err := io.ReadFull(rand.Reader, id)
+	if err != nil {
+		return "", err
+	}
+
+	id[6] &= 0x0F // clear version
+	id[6] |= 0x40 // set version to 4 (random uuid)
+	id[8] &= 0x3F // clear variant
+	id[8] |= 0x80 // set to IETF variant
+
+	return hex.EncodeToString(id), nil
+}
+
+// ClientConfig defines a set of optional configuration variables for a Client.
+type ClientConfig struct {
+	// These default fields are merged with all outgoing events.
+	DefaultLevel      Severity
+	Tags              Tags
+	DefaultServerName string
+	Modules           []map[string]string
+	Extra             map[string]interface{}
+	Interfaces        []Interface
+
+	// DropHandler is called when an event is dropped because the buffer is full.
+	DropHandler func(*Event)
+
+	// Transport is a specific transport to use for event delivery.
+	Transport Transport
+}
+
+// queuedEvent represents an event to send on the worker goroutine.
+//
+// url and authHeader are sent alongside the event to ensure they are matched with
+// the event's project. It includes a return channel for reporting errors.
+type queuedEvent struct {
+	event      *Event
+	url        string
+	authHeader string
+	ch         chan error
 }
 
 var hostname string
 
+// init sets hostname so it doesn't need to be called for every Capture.
 func init() {
 	hostname, _ = os.Hostname()
 }
