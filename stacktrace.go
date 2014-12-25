@@ -17,6 +17,7 @@ import (
 
 // Stacktrace is a Sentry Interface for reporting stack traces.
 //
+// All Stacktrace must be created using NewStacktrace.
 // See http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Stacktrace
 // for more discussion of this interface.
 type Stacktrace struct {

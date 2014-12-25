@@ -9,6 +9,7 @@ import (
 // Http is a Sentry Interface for reporting HTTP requests. All Http must be created using
 // NewHttp.
 //
+// All Http must be created using NewHttp.
 // See http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Http
 // for more discussion of this interface.
 type Http struct {

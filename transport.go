@@ -10,7 +10,8 @@ import (
 // http://sentry.readthedocs.org/en/latest/developer/client/#authentication
 const UserAgent = "go-raven/1.0" // Conventional string which identifies our client to Sentry.
 
-// A Transport is any object capable of sending a Sentry Event.
+// A Transport is any object capable of sending a Sentry Event. Users may use the default
+// HTTPTransport, or provide their own custom transport if they wish.
 type Transport interface {
 	Send(url, authHeader string, event *Event) error
 }
