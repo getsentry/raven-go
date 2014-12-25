@@ -10,6 +10,7 @@ import (
 // http://sentry.readthedocs.org/en/latest/developer/client/#authentication
 const UserAgent = "go-raven/1.0" // Conventional string which identifies our client to Sentry.
 
+// A Transport is any object capable of sending a Sentry Event.
 type Transport interface {
 	Send(url, authHeader string, event *Event) error
 }
@@ -20,6 +21,7 @@ type HTTPTransport struct {
 	Http http.Client
 }
 
+// Send delivers Events to the Sentry API.
 func (t *HTTPTransport) Send(url, authHeader string, event *Event) error {
 	if url == "" {
 		return nil

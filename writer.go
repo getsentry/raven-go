@@ -1,5 +1,7 @@
 package raven
 
+// Writer is designed to be used with log.New to create a new log.Logger that logs to
+// Sentry.
 type Writer struct {
 	Client *Client
 	Level  Severity

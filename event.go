@@ -39,24 +39,6 @@ type Event struct {
 	Interfaces []Interface `json:"-"`
 }
 
-// json serializes an Event into JSON.
-func (event *Event) json() []byte {
-	eventJson, _ := json.Marshal(event)
-
-	interfaces := make(map[string]Interface, len(event.Interfaces))
-	for _, inter := range event.Interfaces {
-		interfaces[inter.Class()] = inter
-	}
-
-	if len(interfaces) > 0 {
-		interfaceJson, _ := json.Marshal(interfaces)
-		eventJson[len(eventJson)-1] = ','
-		eventJson = append(eventJson, interfaceJson[1:]...)
-	}
-
-	return eventJson
-}
-
 // fill sets unset fields to values from contexts.
 //
 // List-like values are merged where possible. Where a single value must be
@@ -131,6 +113,24 @@ func (event *Event) serialize() (r io.Reader, contentType string) {
 	}
 
 	return bytes.NewReader(eventJson), "application/json"
+}
+
+// json serializes an Event into JSON.
+func (event *Event) json() []byte {
+	eventJson, _ := json.Marshal(event)
+
+	interfaces := make(map[string]Interface, len(event.Interfaces))
+	for _, inter := range event.Interfaces {
+		interfaces[inter.Class()] = inter
+	}
+
+	if len(interfaces) > 0 {
+		interfaceJson, _ := json.Marshal(interfaces)
+		eventJson[len(eventJson)-1] = ','
+		eventJson = append(eventJson, interfaceJson[1:]...)
+	}
+
+	return eventJson
 }
 
 // Severity identifies the severity of an event.
