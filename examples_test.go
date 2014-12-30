@@ -2,8 +2,8 @@ package raven
 
 import (
 	"fmt"
-	"net/http"
 	"log"
+	"net/http"
 )
 
 func Example() {
@@ -18,7 +18,7 @@ func Example() {
 		log.Fatal(err)
 	}
 	trace := NewStacktrace(0, 2, nil)
-	packet := NewPacket(raisedErr.Error(), NewException(raisedErr, trace), NewHttp(r))
+	packet := NewPacket(raisedErr.Error(), nil, NewException(raisedErr, trace), NewHttp(r))
 	eventID, ch := client.Capture(packet, nil)
 	if err = <-ch; err != nil {
 		log.Fatal(err)

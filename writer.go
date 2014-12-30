@@ -11,7 +11,7 @@ type Writer struct {
 func (w *Writer) Write(p []byte) (int, error) {
 	message := string(p)
 
-	packet := NewPacket(message, &Message{message, nil})
+	packet := NewPacket(message, nil, &Message{message, nil})
 	packet.Level = w.Level
 	packet.Logger = w.Logger
 	w.Client.Capture(packet, nil)
