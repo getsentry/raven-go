@@ -138,8 +138,9 @@ type Packet struct {
 	// Optional
 	Platform   string                 `json:"platform,omitempty"`
 	Culprit    string                 `json:"culprit,omitempty"`
-	Tags       Tags                   `json:"tags,omitempty"`
 	ServerName string                 `json:"server_name,omitempty"`
+	Release    string                 `json:"release,omitempty"`
+	Tags       Tags                   `json:"tags,omitempty"`
 	Modules    []map[string]string    `json:"modules,omitempty"`
 	Extra      map[string]interface{} `json:"extra,omitempty"`
 
@@ -267,6 +268,7 @@ type Client struct {
 	url        string
 	projectID  string
 	authHeader string
+	release    string
 	queue      chan *outgoingPacket
 }
 
@@ -310,6 +312,12 @@ func (client *Client) SetDSN(dsn string) error {
 	return nil
 }
 
+func (client *Client) SetRelease(release string) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.release = release
+}
+
 func (client *Client) worker() {
 	for outgoingPacket := range client.queue {
 		client.mu.RLock()
@@ -337,6 +345,7 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	// Initialize any required packet fields
 	client.mu.RLock()
 	projectID := client.projectID
+	release := client.release
 	client.mu.RUnlock()
 
 	err := packet.Init(projectID)
@@ -344,6 +353,7 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 		ch <- err
 		return
 	}
+	packet.Release = release
 
 	outgoingPacket := &outgoingPacket{packet, ch}
 
@@ -413,6 +423,13 @@ func (client *Client) Close() {
 	close(client.queue)
 }
 
+func (client *Client) URL() string {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+
+	return client.url
+}
+
 func (client *Client) ProjectID() string {
 	client.mu.RLock()
 	defer client.mu.RUnlock()
@@ -420,11 +437,11 @@ func (client *Client) ProjectID() string {
 	return client.projectID
 }
 
-func (client *Client) URL() string {
+func (client *Client) Release() string {
 	client.mu.RLock()
 	defer client.mu.RUnlock()
 
-	return client.url
+	return client.release
 }
 
 // HTTPTransport is the default transport, delivering packets to Sentry via the
