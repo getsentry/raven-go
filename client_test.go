@@ -99,8 +99,8 @@ func TestUnmarshalTags(t *testing.T) {
 		Expected Tags
 	}{
 		{
-			`{"foo":"bar","bar":"baz"}`,
-			Tags{Tag{Key: "foo", Value: "bar"}, Tag{Key: "bar", Value: "baz"}},
+			`{"foo":"bar"}`,
+			Tags{Tag{Key: "foo", Value: "bar"}},
 		},
 		{
 			`[["foo","bar"],["bar","baz"]]`,
