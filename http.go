@@ -1,6 +1,7 @@
 package raven
 
 import (
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,11 +19,11 @@ func NewHttp(req *http.Request) *Http {
 		URL:     proto + "://" + req.Host + req.URL.Path,
 		Headers: make(map[string]string, len(req.Header)),
 	}
-	if addr := strings.SplitN(req.RemoteAddr, ":", 2); len(addr) == 2 {
-		h.Env = map[string]string{"REMOTE_ADDR": addr[0], "REMOTE_PORT": addr[1]}
+	if addr, port, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+		h.Env = map[string]string{"REMOTE_ADDR": addr, "REMOTE_PORT": port}
 	}
 	for k, v := range req.Header {
-		h.Headers[k] = strings.Join(v, "; ")
+		h.Headers[k] = strings.Join(v, ",")
 	}
 	return h
 }
