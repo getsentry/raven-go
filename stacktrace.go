@@ -176,10 +176,6 @@ var trimPaths []string
 // Try to trim the GOROOT or GOPATH prefix off of a filename
 func trimPath(filename string) string {
 	for _, prefix := range trimPaths {
-		if prefix[len(prefix)-1] != filepath.Separator {
-			prefix += string(filepath.Separator)
-		}
-
 		if trimmed := strings.TrimPrefix(filename, prefix); len(trimmed) < len(filename) {
 			return trimmed
 		}
@@ -188,5 +184,12 @@ func trimPath(filename string) string {
 }
 
 func init() {
-	trimPaths = build.Default.SrcDirs()
+	// Collect all source directories, and make sure they
+	// end in a trailing "separator"
+	for _, prefix := range build.Default.SrcDirs() {
+		if prefix[len(prefix)-1] != filepath.Separator {
+			prefix += string(filepath.Separator)
+		}
+		trimPaths = append(trimPaths, prefix)
+	}
 }
