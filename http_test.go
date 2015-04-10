@@ -120,7 +120,30 @@ func TestNewHttp(t *testing.T) {
 	}
 }
 
-// TODO: write these
-func TestSanitizeQuery(t *testing.T) {
+var sanitizeQueryTests = []struct {
+	input, output string
+}{
+	{"foo=bar", "foo=bar"},
+	{"password=foo", "password=********"},
+	{"passphrase=foo", "passphrase=********"},
+	{"passwd=foo", "passwd=********"},
+	{"secret=foo", "secret=********"},
+	{"secretstuff=foo", "secretstuff=********"},
+	{"foo=bar&secret=foo", "foo=bar&secret=********"},
+	{"secret=foo&secret=bar", "secret=********"},
+}
 
+func parseQuery(q string) url.Values {
+	r, _ := url.ParseQuery(q)
+	return r
+}
+
+func TestSanitizeQuery(t *testing.T) {
+	for _, test := range sanitizeQueryTests {
+		actual := sanitizeQuery(parseQuery(test.input))
+		expected := parseQuery(test.output)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("incorrect sanitization: got %+v, want %+v", actual, expected)
+		}
+	}
 }
