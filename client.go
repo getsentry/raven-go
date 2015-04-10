@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	userAgent       = "go-raven/1.0"
+	userAgent       = "raven-go/1.0"
 	timestampFormat = `"2006-01-02T15:04:05"`
 )
 
