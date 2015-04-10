@@ -26,7 +26,7 @@ func (s *Stacktrace) Class() string { return "sentry.interfaces.Stacktrace" }
 func (s *Stacktrace) Culprit() string {
 	for i := len(s.Frames) - 1; i >= 0; i-- {
 		frame := s.Frames[i]
-		if *frame.InApp == true && frame.Module != "" && frame.Function != "" {
+		if frame.InApp == true && frame.Module != "" && frame.Function != "" {
 			return frame.Module + "." + frame.Function
 		}
 	}
@@ -46,7 +46,7 @@ type StacktraceFrame struct {
 	ContextLine  string   `json:"context_line,omitempty"`
 	PreContext   []string `json:"pre_context,omitempty"`
 	PostContext  []string `json:"post_context,omitempty"`
-	InApp        *bool    `json:"in_app,omitempty"`
+	InApp        bool     `json:"in_app,omitempty"`
 }
 
 // Intialize and populate a new stacktrace, skipping skip frames.
@@ -82,14 +82,14 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 // appPackagePrefixes is a list of prefixes used to check whether a package should
 // be considered "in app".
 func NewStacktraceFrame(pc uintptr, file string, line, context int, appPackagePrefixes []string) *StacktraceFrame {
-	frame := &StacktraceFrame{AbsolutePath: file, Filename: trimPath(file), Lineno: line, InApp: new(bool)}
+	frame := &StacktraceFrame{AbsolutePath: file, Filename: trimPath(file), Lineno: line, InApp: false}
 	frame.Module, frame.Function = functionName(pc)
 	if frame.Module == "main" {
-		*frame.InApp = true
+		frame.InApp = true
 	} else {
 		for _, prefix := range appPackagePrefixes {
 			if strings.HasPrefix(frame.Module, prefix) && !strings.Contains(frame.Module, "vendor") && !strings.Contains(frame.Module, "third_party") {
-				*frame.InApp = true
+				frame.InApp = true
 			}
 		}
 	}

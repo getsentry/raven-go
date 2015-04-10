@@ -69,7 +69,7 @@ func TestStacktrace(t *testing.T) {
 	if len(f.PostContext) != 2 || f.PostContext[0] != "\t// b" || f.PostContext[1] != "}" {
 		t.Errorf("incorrect PostContext %#v", f.PostContext)
 	}
-	if !*f.InApp {
+	if !f.InApp {
 		t.Error("expected InApp to be true")
 	}
 
