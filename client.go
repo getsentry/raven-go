@@ -26,9 +26,15 @@ const (
 	timestampFormat = `"2006-01-02T15:04:05"`
 )
 
-type Severity string
+var (
+	ErrPacketDropped         = errors.New("raven: packet dropped")
+	ErrUnableToUnmarshalJSON = errors.New("raven: unable to unmarshal JSON")
+	ErrMissingUser           = errors.New("raven: dns missing public key and/or password")
+	ErrMissingPrivateKey     = errors.New("raven: dsn missing private key")
+	ErrMissingProjectID      = errors.New("raven: dsn missing project id")
+)
 
-var ErrPacketDropped = errors.New("raven: packet dropped")
+type Severity string
 
 // http://docs.python.org/2/howto/logging.html#logging-levels
 const (
@@ -116,7 +122,7 @@ func (t *Tags) UnmarshalJSON(data []byte) error {
 			tags = append(tags, Tag{k, v})
 		}
 	default:
-		return errors.New("raven: unable to unmarshal JSON")
+		return ErrUnableToUnmarshalJSON
 	}
 
 	*t = tags
@@ -288,12 +294,12 @@ func (client *Client) SetDSN(dsn string) error {
 	}
 
 	if uri.User == nil {
-		return errors.New("raven: dsn missing public key and/or private key")
+		return ErrMissingUser
 	}
 	publicKey := uri.User.Username()
 	secretKey, ok := uri.User.Password()
 	if !ok {
-		return errors.New("raven: dsn missing private key")
+		return ErrMissingPrivateKey
 	}
 	uri.User = nil
 
@@ -302,7 +308,7 @@ func (client *Client) SetDSN(dsn string) error {
 		uri.Path = uri.Path[:idx+1] + "api/" + client.projectID + "/store/"
 	}
 	if client.projectID == "" {
-		return errors.New("raven: dsn missing project id")
+		return ErrMissingProjectID
 	}
 
 	client.url = uri.String()
