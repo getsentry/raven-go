@@ -247,14 +247,25 @@ func (packet *Packet) JSON() []byte {
 	return packetJSON
 }
 
+type Processor func(packet *Packet) *Packet
+
+type ClientConfig struct {
+	Processors *[]Processor
+	Tags       map[string]string
+}
+
 // The maximum number of packets that will be buffered waiting to be delivered.
 // Packets will be dropped if the buffer is full. Used by NewClient.
 var MaxQueueBuffer = 100
 
 // NewClient constructs a Sentry client and spawns a background goroutine to
 // handle packets sent by Client.Report.
-func NewClient(dsn string, tags map[string]string) (*Client, error) {
-	client := &Client{Transport: &HTTPTransport{}, Tags: tags, queue: make(chan *outgoingPacket, MaxQueueBuffer)}
+func NewClient(dsn string, config *ClientConfig) (*Client, error) {
+	client := &Client{
+		Config:    config,
+		Transport: &HTTPTransport{},
+		queue:     make(chan *outgoingPacket, MaxQueueBuffer),
+	}
 	go client.worker()
 	return client, client.SetDSN(dsn)
 }
@@ -263,7 +274,7 @@ func NewClient(dsn string, tags map[string]string) (*Client, error) {
 // by calling NewClient. Modification of fields concurrently with Send or after
 // calling Report for the first time is not thread-safe.
 type Client struct {
-	Tags map[string]string
+	Config *ClientConfig
 
 	Transport Transport
 
@@ -346,7 +357,7 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 
 	// Merge capture tags and client tags
 	packet.AddTags(captureTags)
-	packet.AddTags(client.Tags)
+	packet.AddTags(client.Config.Tags)
 
 	// Initialize any required packet fields
 	client.mu.RLock()
@@ -361,7 +372,9 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	}
 	packet.Release = release
 
-	outgoingPacket := &outgoingPacket{packet, ch}
+	// Call all processors and sanitizers for a packet
+	scrubbedPacket := client.Scrub(packet)
+	outgoingPacket := &outgoingPacket{scrubbedPacket, ch}
 
 	select {
 	case client.queue <- outgoingPacket:

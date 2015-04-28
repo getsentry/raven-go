@@ -3,7 +3,6 @@ package raven
 import (
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -14,8 +13,7 @@ func NewHttp(req *http.Request) *Http {
 	}
 	h := &Http{
 		Method:  req.Method,
-		Cookies: req.Header.Get("Cookie"),
-		Query:   sanitizeQuery(req.URL.Query()).Encode(),
+		Query:   scrubQuery(req.URL.Query()).Encode(),
 		URL:     proto + "://" + req.Host + req.URL.Path,
 		Headers: make(map[string]string, len(req.Header)),
 	}
@@ -28,19 +26,6 @@ func NewHttp(req *http.Request) *Http {
 	return h
 }
 
-var querySecretFields = []string{"password", "passphrase", "passwd", "secret"}
-
-func sanitizeQuery(query url.Values) url.Values {
-	for _, keyword := range querySecretFields {
-		for field := range query {
-			if strings.Contains(field, keyword) {
-				query[field] = []string{"********"}
-			}
-		}
-	}
-	return query
-}
-
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Http
 type Http struct {
 	// Required
@@ -49,7 +34,6 @@ type Http struct {
 	Query  string `json:"query_string,omitempty"`
 
 	// Optional
-	Cookies string            `json:"cookies,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
 
