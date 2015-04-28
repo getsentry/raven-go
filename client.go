@@ -39,10 +39,10 @@ type Severity string
 // http://docs.python.org/2/howto/logging.html#logging-levels
 const (
 	DEBUG   Severity = "debug"
-	INFO             = "info"
-	WARNING          = "warning"
-	ERROR            = "error"
-	FATAL            = "fatal"
+	INFO    Severity = "info"
+	WARNING Severity = "warning"
+	ERROR   Severity = "error"
+	FATAL   Severity = "fatal"
 )
 
 type Timestamp time.Time
