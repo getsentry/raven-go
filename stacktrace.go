@@ -21,7 +21,7 @@ type Stacktrace struct {
 	Frames []*StacktraceFrame `json:"frames"`
 }
 
-func (s *Stacktrace) Class() string { return "sentry.interfaces.Stacktrace" }
+func (s *Stacktrace) Class() string { return "stacktrace" }
 
 func (s *Stacktrace) Culprit() string {
 	for i := len(s.Frames) - 1; i >= 0; i-- {
