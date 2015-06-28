@@ -46,7 +46,7 @@ type StacktraceFrame struct {
 	ContextLine  string   `json:"context_line,omitempty"`
 	PreContext   []string `json:"pre_context,omitempty"`
 	PostContext  []string `json:"post_context,omitempty"`
-	InApp        bool     `json:"in_app,omitempty"`
+	InApp        bool     `json:"in_app"`
 }
 
 // Intialize and populate a new stacktrace, skipping skip frames.
