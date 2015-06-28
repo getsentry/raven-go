@@ -64,7 +64,10 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 		if !ok {
 			break
 		}
-		frames = append(frames, NewStacktraceFrame(pc, file, line, context, appPackagePrefixes))
+		frame := NewStacktraceFrame(pc, file, line, context, appPackagePrefixes)
+		if frame != nil {
+			frames = append(frames, frame)
+		}
 	}
 	// Sentry wants the frames with the oldest first, so reverse them
 	for i, j := 0, len(frames)-1; i < j; i, j = i+1, j-1 {
@@ -84,6 +87,13 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 func NewStacktraceFrame(pc uintptr, file string, line, context int, appPackagePrefixes []string) *StacktraceFrame {
 	frame := &StacktraceFrame{AbsolutePath: file, Filename: trimPath(file), Lineno: line, InApp: false}
 	frame.Module, frame.Function = functionName(pc)
+
+	// `runtime.goexit` is effectively a placeholder that comes from
+	// runtime/asm_amd64.s and is meaningless.
+	if frame.Module == "runtime" && frame.Function == "goexit" {
+		return nil
+	}
+
 	if frame.Module == "main" {
 		frame.InApp = true
 	} else {
