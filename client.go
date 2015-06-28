@@ -251,11 +251,17 @@ func (packet *Packet) JSON() []byte {
 // Packets will be dropped if the buffer is full. Used by NewClient.
 var MaxQueueBuffer = 100
 
+func newClient(tags map[string]string) *Client {
+	client := &Client{Transport: &HTTPTransport{}, Tags: tags, queue: make(chan *outgoingPacket, MaxQueueBuffer)}
+	go client.worker()
+	client.SetDSN(os.Getenv("SENTRY_DSN"))
+	return client
+}
+
 // NewClient constructs a Sentry client and spawns a background goroutine to
 // handle packets sent by Client.Report.
 func NewClient(dsn string, tags map[string]string) (*Client, error) {
-	client := &Client{Transport: &HTTPTransport{}, Tags: tags, queue: make(chan *outgoingPacket, MaxQueueBuffer)}
-	go client.worker()
+	client := newClient(tags)
 	return client, client.SetDSN(dsn)
 }
 
@@ -277,6 +283,9 @@ type Client struct {
 	release    string
 	queue      chan *outgoingPacket
 }
+
+// Initialize a default *Client instance
+var DefaultClient = newClient(nil)
 
 // SetDSN updates a client with a new DSN. It safe to call after and
 // concurrently with calls to Report and Send.
@@ -318,14 +327,22 @@ func (client *Client) SetDSN(dsn string) error {
 	return nil
 }
 
+// Sets the DSN for the default *Client instance
+func SetDSN(dsn string) error { return DefaultClient.SetDSN(dsn) }
+
+// SetRelease sets the "release" tag.
 func (client *Client) SetRelease(release string) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	client.release = release
 }
 
+// SetRelease sets the "release" tag on the default *Client
+func SetRelease(release string) { DefaultClient.SetRelease(release) }
+
 func (client *Client) worker() {
 	for outgoingPacket := range client.queue {
+
 		client.mu.RLock()
 		url, authHeader := client.url, client.authHeader
 		client.mu.RUnlock()
@@ -376,6 +393,13 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	return packet.EventID, ch
 }
 
+// Capture asynchronously delivers a packet to the Sentry server with the default *Client.
+// It is a no-op when client is nil. A channel is provided if it is important to check for a
+// send's success.
+func Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
+	return DefaultClient.Capture(packet, captureTags)
+}
+
 // CaptureMessage formats and delivers a string message to the Sentry server.
 func (client *Client) CaptureMessage(message string, tags map[string]string, interfaces ...Interface) string {
 	if client == nil {
@@ -388,7 +412,12 @@ func (client *Client) CaptureMessage(message string, tags map[string]string, int
 	return eventID
 }
 
-// CaptureErrors formats and delivers an errorto the Sentry server.
+// CaptureMessage formats and delivers a string message to the Sentry server with the default *Client
+func CaptureMessage(message string, tags map[string]string, interfaces ...Interface) string {
+	return DefaultClient.CaptureMessage(message, tags, interfaces...)
+}
+
+// CaptureErrors formats and delivers an error to the Sentry server.
 // Adds a stacktrace to the packet, excluding the call to this method.
 func (client *Client) CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
 	if client == nil {
@@ -399,6 +428,12 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
+}
+
+// CaptureErrors formats and delivers an error to the Sentry server using the default *Client.
+// Adds a stacktrace to the packet, excluding the call to this method.
+func CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
+	return DefaultClient.CaptureError(err, tags, interfaces...)
 }
 
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
@@ -425,9 +460,16 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 	f()
 }
 
+// CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
+func CapturePanic(f func(), tags map[string]string, interfaces ...Interface) {
+	DefaultClient.CapturePanic(f, tags, interfaces...)
+}
+
 func (client *Client) Close() {
 	close(client.queue)
 }
+
+func Close() { DefaultClient.Close() }
 
 func (client *Client) URL() string {
 	client.mu.RLock()
@@ -436,6 +478,8 @@ func (client *Client) URL() string {
 	return client.url
 }
 
+func URL() string { return DefaultClient.URL() }
+
 func (client *Client) ProjectID() string {
 	client.mu.RLock()
 	defer client.mu.RUnlock()
@@ -443,12 +487,16 @@ func (client *Client) ProjectID() string {
 	return client.projectID
 }
 
+func ProjectID() string { return DefaultClient.ProjectID() }
+
 func (client *Client) Release() string {
 	client.mu.RLock()
 	defer client.mu.RUnlock()
 
 	return client.release
 }
+
+func Release() string { return DefaultClient.Release() }
 
 // HTTPTransport is the default transport, delivering packets to Sentry via the
 // HTTP API.
