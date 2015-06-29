@@ -9,7 +9,7 @@ type Message struct {
 	Params []interface{} `json:"params,omitempty"`
 }
 
-func (m *Message) Class() string { return "sentry.interfaces.Message" }
+func (m *Message) Class() string { return "logentry" }
 
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Template
 type Template struct {
@@ -24,7 +24,7 @@ type Template struct {
 	AbsolutePath string   `json:"abs_path,omitempty"`
 }
 
-func (t *Template) Class() string { return "sentry.interfaces.Template" }
+func (t *Template) Class() string { return "template" }
 
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.User
 type User struct {
@@ -33,7 +33,7 @@ type User struct {
 	Email    string `json:"email,omitempty"`
 }
 
-func (h *User) Class() string { return "sentry.interfaces.User" }
+func (h *User) Class() string { return "user" }
 
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Query
 type Query struct {
@@ -44,4 +44,4 @@ type Query struct {
 	Engine string `json:"engine,omitempty"`
 }
 
-func (q *Query) Class() string { return "sentry.interfaces.Query" }
+func (q *Query) Class() string { return "query" }

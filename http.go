@@ -57,4 +57,4 @@ type Http struct {
 	Data interface{} `json:"data,omitempty"`
 }
 
-func (h *Http) Class() string { return "sentry.interfaces.Http" }
+func (h *Http) Class() string { return "request" }
