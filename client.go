@@ -258,8 +258,22 @@ func newClient(tags map[string]string) *Client {
 	return client
 }
 
+// New constructs a new Sentry client instance
+func New(dsn string) (*Client, error) {
+	client := newClient(nil)
+	return client, client.SetDSN(dsn)
+}
+
+// NewWithTags constructs a new Sentry client instance with default tags.
+func NewWithTags(dsn string, tags map[string]string) (*Client, error) {
+	client := newClient(tags)
+	return client, client.SetDSN(dsn)
+}
+
 // NewClient constructs a Sentry client and spawns a background goroutine to
 // handle packets sent by Client.Report.
+//
+// Deprecated: use New and NewWithTags instead
 func NewClient(dsn string, tags map[string]string) (*Client, error) {
 	client := newClient(tags)
 	return client, client.SetDSN(dsn)
