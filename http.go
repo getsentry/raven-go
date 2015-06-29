@@ -1,9 +1,12 @@
 package raven
 
 import (
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strings"
 )
 
@@ -58,3 +61,24 @@ type Http struct {
 }
 
 func (h *Http) Class() string { return "request" }
+
+// Recovery handler to wrap the stdlib net/http Mux.
+// Example:
+//	http.HandleFunc("/", raven.RecoveryHandler(func(w http.ResponseWriter, r *http.Request) {
+//		...
+//	}))
+func RecoveryHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rval := recover(); rval != nil {
+				debug.PrintStack()
+				rvalStr := fmt.Sprint(rval)
+				packet := NewPacket(rvalStr, NewException(errors.New(rvalStr), NewStacktrace(2, 3, nil)), NewHttp(r))
+				Capture(packet, nil)
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}()
+
+		handler(w, r)
+	}
+}
