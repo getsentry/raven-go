@@ -148,3 +148,53 @@ func TestUnmarshalTimestamp(t *testing.T) {
 		t.Errorf("incorrect string; got %s, want %s", actual, expected)
 	}
 }
+
+func TestNewPacket(t *testing.T) {
+	interfaces := []Interface{&testInterface{}}
+	p := NewPacket("message", nil, interfaces...)
+
+	if p.Message != "message" {
+		t.Fail()
+	}
+
+	if !reflect.DeepEqual(interfaces, p.Interfaces) {
+		t.Fail()
+	}
+
+	if _, ok := p.Extra["runtime.Version"]; !ok {
+		t.Fail()
+	}
+
+	if _, ok := p.Extra["runtime.NumCPU"]; !ok {
+		t.Fail()
+	}
+
+	if _, ok := p.Extra["runtime.GOMAXPROCS"]; !ok {
+		t.Fail()
+	}
+
+	if _, ok := p.Extra["runtime.NumGoroutine"]; !ok {
+		t.Fail()
+	}
+
+	p = NewPacket("message", map[string]interface{}{"key1": "value1"}, interfaces...)
+	if _, ok := p.Extra["runtime.Version"]; !ok {
+		t.Fail()
+	}
+
+	if _, ok := p.Extra["runtime.NumCPU"]; !ok {
+		t.Fail()
+	}
+
+	if _, ok := p.Extra["runtime.GOMAXPROCS"]; !ok {
+		t.Fail()
+	}
+
+	if _, ok := p.Extra["runtime.NumGoroutine"]; !ok {
+		t.Fail()
+	}
+
+	if v, ok := p.Extra["key1"]; !ok || v != "value1" {
+		t.Fail()
+	}
+}

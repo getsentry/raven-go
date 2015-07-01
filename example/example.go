@@ -35,7 +35,7 @@ func CheckError(err error, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	packet := raven.NewPacket(err.Error(), raven.NewException(err, trace()), raven.NewHttp(r))
+	packet := raven.NewPacket(err.Error(), nil, raven.NewException(err, trace()), raven.NewHttp(r))
 	eventID, _ := client.Capture(packet, nil)
 	message := fmt.Sprintf("Error event with id \"%s\" - %s", eventID, err.Error())
 	log.Println(message)

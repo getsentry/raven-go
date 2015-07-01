@@ -154,13 +154,18 @@ type Packet struct {
 }
 
 // NewPacket constructs a packet with the specified message and interfaces.
-func NewPacket(message string, interfaces ...Interface) *Packet {
-	extra := map[string]interface{}{
-		"runtime.Version":      runtime.Version(),
-		"runtime.NumCPU":       runtime.NumCPU(),
-		"runtime.GOMAXPROCS":   runtime.GOMAXPROCS(0), // 0 just returns the current value
-		"runtime.NumGoroutine": runtime.NumGoroutine(),
+func NewPacket(message string, extra map[string]interface{},
+	interfaces ...Interface) *Packet {
+
+	if extra == nil {
+		extra = make(map[string]interface{})
 	}
+
+	extra["runtime.Version"] = runtime.Version()
+	extra["runtime.NumCPU"] = runtime.NumCPU()
+	extra["runtime.GOMAXPROCS"] = runtime.GOMAXPROCS(0)
+	extra["runtime.NumGoroutine"] = runtime.NumGoroutine()
+
 	return &Packet{
 		Message:    message,
 		Interfaces: interfaces,
@@ -415,12 +420,14 @@ func Capture(packet *Packet, captureTags map[string]string) (eventID string, ch 
 }
 
 // CaptureMessage formats and delivers a string message to the Sentry server.
-func (client *Client) CaptureMessage(message string, tags map[string]string, interfaces ...Interface) string {
+func (client *Client) CaptureMessage(message string, tags map[string]string,
+	extra map[string]interface{}, interfaces ...Interface) string {
+
 	if client == nil {
 		return ""
 	}
 
-	packet := NewPacket(message, append(interfaces, &Message{message, nil})...)
+	packet := NewPacket(message, extra, append(interfaces, &Message{message, nil})...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -433,12 +440,16 @@ func CaptureMessage(message string, tags map[string]string, interfaces ...Interf
 
 // CaptureErrors formats and delivers an error to the Sentry server.
 // Adds a stacktrace to the packet, excluding the call to this method.
-func (client *Client) CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
+func (client *Client) CaptureError(err error, tags map[string]string, extra map[string]interface{},
+	interfaces ...Interface) string {
+
 	if client == nil {
 		return ""
 	}
 
-	packet := NewPacket(err.Error(), append(interfaces, NewException(err, NewStacktrace(1, 3, nil)))...)
+	packet := NewPacket(err.Error(), extra,
+		append(interfaces, NewException(err, NewStacktrace(1, 3, nil)))...)
+
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -451,7 +462,9 @@ func CaptureError(err error, tags map[string]string, interfaces ...Interface) st
 }
 
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
-func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) {
+func (client *Client) CapturePanic(f func(), tags map[string]string, extra map[string]interface{},
+	interfaces ...Interface) {
+
 	if client == nil {
 		return
 	}
@@ -462,10 +475,10 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 		case nil:
 			return
 		case error:
-			packet = NewPacket(rval.Error(), append(interfaces, NewException(rval, NewStacktrace(2, 3, nil)))...)
+			packet = NewPacket(rval.Error(), extra, append(interfaces, NewException(rval, NewStacktrace(2, 3, nil)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
-			packet = NewPacket(rvalStr, append(interfaces, NewException(errors.New(rvalStr), NewStacktrace(2, 3, nil)))...)
+			packet = NewPacket(rvalStr, extra, append(interfaces, NewException(errors.New(rvalStr), NewStacktrace(2, 3, nil)))...)
 		}
 
 		client.Capture(packet, tags)
