@@ -28,6 +28,7 @@ func (t *Template) Class() string { return "template" }
 
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.User
 type User struct {
+	// All fields are optional
 	ID       string `json:"id,omitempty"`
 	Username string `json:"username,omitempty"`
 	Email    string `json:"email,omitempty"`
