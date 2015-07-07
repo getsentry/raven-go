@@ -553,10 +553,10 @@ func CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interf
 
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
 func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) {
-	if client == nil {
-		return
-	}
-
+	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
+	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
+	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
+	// be completely noop though if we cared.
 	defer func() {
 		var packet *Packet
 		switch rval := recover().(type) {
