@@ -296,6 +296,11 @@ type Client struct {
 	authHeader string
 	release    string
 	queue      chan *outgoingPacket
+
+	// A WaitGroup to keep track of all currently in-progress captures
+	// This is intended to be used with Client.Wait() to assure that
+	// all messages have been transported before exiting the process.
+	wg sync.WaitGroup
 }
 
 // Initialize a default *Client instance
@@ -362,6 +367,7 @@ func (client *Client) worker() {
 		client.mu.RUnlock()
 
 		outgoingPacket.ch <- client.Transport.Send(url, authHeader, outgoingPacket.packet)
+		client.wg.Done()
 	}
 }
 
@@ -372,6 +378,11 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	if client == nil {
 		return
 	}
+
+	// Keep track of all running Captures so that we can wait for them all to finish
+	// *Must* call client.wg.Done() on any path that indicates that an event was
+	// finished being acted upon, whether success or failure
+	client.wg.Add(1)
 
 	ch = make(chan error, 1)
 
@@ -388,6 +399,7 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	err := packet.Init(projectID)
 	if err != nil {
 		ch <- err
+		client.wg.Done()
 		return
 	}
 	packet.Release = release
@@ -402,6 +414,7 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 			client.DropHandler(packet)
 		}
 		ch <- ErrPacketDropped
+		client.wg.Done()
 	}
 
 	return packet.EventID, ch
@@ -484,6 +497,15 @@ func (client *Client) Close() {
 }
 
 func Close() { DefaultClient.Close() }
+
+// Wait blocks and waits for all events to finish being sent to Sentry server
+func (client *Client) Wait() {
+	client.Close()
+	client.wg.Wait()
+}
+
+// Wait blocks and waits for all events to finish being sent to Sentry server
+func Wait() { DefaultClient.Wait() }
 
 func (client *Client) URL() string {
 	client.mu.RLock()
