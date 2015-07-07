@@ -500,7 +500,6 @@ func Close() { DefaultClient.Close() }
 
 // Wait blocks and waits for all events to finish being sent to Sentry server
 func (client *Client) Wait() {
-	client.Close()
 	client.wg.Wait()
 }
 
