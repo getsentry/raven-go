@@ -247,12 +247,60 @@ func (packet *Packet) JSON() []byte {
 	return packetJSON
 }
 
+type context struct {
+	user *User
+	http *Http
+	tags map[string]string
+}
+
+func (c *context) SetUser(u *User) { c.user = u }
+func (c *context) SetHttp(h *Http) { c.http = h }
+func (c *context) SetTags(t map[string]string) {
+	if c.tags == nil {
+		c.tags = make(map[string]string)
+	}
+	for k, v := range t {
+		c.tags[k] = v
+	}
+}
+func (c *context) Clear() {
+	c.user = nil
+	c.http = nil
+	c.tags = nil
+}
+
+// Return a list of interfaces to be used in appending with the rest
+func (c *context) interfaces() []Interface {
+	len, i := 0, 0
+	if c.user != nil {
+		len++
+	}
+	if c.http != nil {
+		len++
+	}
+	interfaces := make([]Interface, len)
+	if c.user != nil {
+		interfaces[i] = c.user
+		i++
+	}
+	if c.http != nil {
+		interfaces[i] = c.http
+		i++
+	}
+	return interfaces
+}
+
 // The maximum number of packets that will be buffered waiting to be delivered.
 // Packets will be dropped if the buffer is full. Used by NewClient.
 var MaxQueueBuffer = 100
 
 func newClient(tags map[string]string) *Client {
-	client := &Client{Transport: &HTTPTransport{}, Tags: tags, queue: make(chan *outgoingPacket, MaxQueueBuffer)}
+	client := &Client{
+		Transport: &HTTPTransport{},
+		Tags:      tags,
+		context:   &context{},
+		queue:     make(chan *outgoingPacket, MaxQueueBuffer),
+	}
 	go client.worker()
 	client.SetDSN(os.Getenv("SENTRY_DSN"))
 	return client
@@ -289,6 +337,9 @@ type Client struct {
 
 	// DropHandler is called when a packet is dropped because the buffer is full.
 	DropHandler func(*Packet)
+
+	// Context that will get appending to all packets
+	context *context
 
 	mu         sync.RWMutex
 	url        string
@@ -389,6 +440,7 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	// Merge capture tags and client tags
 	packet.AddTags(captureTags)
 	packet.AddTags(client.Tags)
+	packet.AddTags(client.context.tags)
 
 	// Initialize any required packet fields
 	client.mu.RLock()
@@ -433,7 +485,7 @@ func (client *Client) CaptureMessage(message string, tags map[string]string, int
 		return ""
 	}
 
-	packet := NewPacket(message, append(interfaces, &Message{message, nil})...)
+	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -450,7 +502,7 @@ func (client *Client) CaptureMessageAndWait(message string, tags map[string]stri
 		return ""
 	}
 
-	packet := NewPacket(message, append(interfaces, &Message{message, nil})...)
+	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
 	eventID, ch := client.Capture(packet, tags)
 	<-ch
 
@@ -469,7 +521,7 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 		return ""
 	}
 
-	packet := NewPacket(err.Error(), append(interfaces, NewException(err, NewStacktrace(1, 3, nil)))...)
+	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, nil)))...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -487,7 +539,7 @@ func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, int
 		return ""
 	}
 
-	packet := NewPacket(err.Error(), append(interfaces, NewException(err, NewStacktrace(1, 3, nil)))...)
+	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, nil)))...)
 	eventID, ch := client.Capture(packet, tags)
 	<-ch
 
@@ -511,10 +563,10 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 		case nil:
 			return
 		case error:
-			packet = NewPacket(rval.Error(), append(interfaces, NewException(rval, NewStacktrace(2, 3, nil)))...)
+			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, nil)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
-			packet = NewPacket(rvalStr, append(interfaces, NewException(errors.New(rvalStr), NewStacktrace(2, 3, nil)))...)
+			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, nil)))...)
 		}
 
 		client.Capture(packet, tags)
@@ -568,6 +620,16 @@ func (client *Client) Release() string {
 }
 
 func Release() string { return DefaultClient.Release() }
+
+func (c *Client) SetUserContext(u *User)             { c.context.SetUser(u) }
+func (c *Client) SetHttpContext(h *Http)             { c.context.SetHttp(h) }
+func (c *Client) SetTagsContext(t map[string]string) { c.context.SetTags(t) }
+func (c *Client) ClearContext()                      { c.context.Clear() }
+
+func SetUserContext(u *User)             { DefaultClient.SetUserContext(u) }
+func SetHttpContext(h *Http)             { DefaultClient.SetHttpContext(h) }
+func SetTagsContext(t map[string]string) { DefaultClient.SetTagsContext(t) }
+func ClearContext()                      { DefaultClient.ClearContext() }
 
 // HTTPTransport is the default transport, delivering packets to Sentry via the
 // HTTP API.
