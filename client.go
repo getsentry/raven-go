@@ -29,7 +29,7 @@ const (
 var (
 	ErrPacketDropped         = errors.New("raven: packet dropped")
 	ErrUnableToUnmarshalJSON = errors.New("raven: unable to unmarshal JSON")
-	ErrMissingUser           = errors.New("raven: dns missing public key and/or password")
+	ErrMissingUser           = errors.New("raven: dsn missing public key and/or password")
 	ErrMissingPrivateKey     = errors.New("raven: dsn missing private key")
 	ErrMissingProjectID      = errors.New("raven: dsn missing project id")
 )
