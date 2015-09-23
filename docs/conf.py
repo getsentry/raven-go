@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# raven-js documentation build configuration file, created by
+# raven-go documentation build configuration file, created by
 # sphinx-quickstart on Mon Jan 21 21:04:27 2013.
 #
 # This file is execfile()d with the current directory set to its containing dir.
@@ -165,7 +165,7 @@ html_static_path = ['_static']
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'raven-jsdoc'
+htmlhelp_basename = 'raven-godoc'
 
 
 # -- Options for LaTeX output --------------------------------------------------
@@ -184,8 +184,8 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'raven-js.tex', u'raven-js Documentation',
-   u'Matt Robenolt', 'manual'),
+  ('index', 'raven-go.tex', u'raven-go Documentation',
+   u'Functional Software Inc.', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -214,8 +214,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'raven-js', u'raven-js Documentation',
-     [u'Matt Robenolt'], 1)
+    ('index', 'raven-go', u'raven-go Documentation',
+     [u'Functional Software Inc.'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -228,8 +228,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'raven-js', u'raven-js Documentation',
-   u'Matt Robenolt', 'raven-js', 'One line description of project.',
+  ('index', 'raven-go', u'raven-go Documentation',
+   u'Functional Software Inc.', 'raven-go', 'One line description of project.',
    'Miscellaneous'),
 ]
 
