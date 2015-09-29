@@ -3,7 +3,7 @@
     Raven Go
     ========
 
-.. sentry:edition: hosted, on-premise
+.. sentry:edition:: hosted, on-premise
 
     .. class:: platform-go
 
