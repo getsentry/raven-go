@@ -1,11 +1,10 @@
 {
-  "wizards": {
+  "platforms": {
     "go": {
       "name": "Go",
-      "client_lib": "raven-go",
-      "is_framework": false,
+      "type": "language",
       "doc_link": "",
-      "snippets": [
+      "wizard": [
         "index#installation",
         "index#configuring-the-client",
         "index#reporting-errors"
