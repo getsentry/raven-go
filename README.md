@@ -1,5 +1,10 @@
 # Sentry Hook for Logrus <img src="http://i.imgur.com/hTeVwmJ.png" width="40" height="40" alt=":walrus:" class="emoji" title=":walrus:" />
 
+
+[![Build Status](https://drone.io/github.com/evalphobia/logrus_sentry/status.png)](https://drone.io/github.com/evalphobia/logrus_sentry/latest)
+
+[![Coverage Status](https://coveralls.io/repos/evalphobia/logrus_sentry/badge.svg?branch=master&service=github)](https://coveralls.io/github/evalphobia/logrus_sentry?branch=master)
+
 [Sentry](https://getsentry.com) provides both self-hosted and hosted
 solutions for exception tracking.
 Both client and server are
