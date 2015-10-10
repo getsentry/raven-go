@@ -51,7 +51,7 @@ hook, err := logrus_sentry.NewWithTagsSentryHook(YOUR_DSN, tags, levels)
 
 ```
 
-If you wish to initialize a SentryHook with an already initialized raven client, you can use 
+If you wish to initialize a SentryHook with an already initialized raven client, you can use
 the `NewWithClientSentryHook` constructor:
 
 ```go
@@ -114,3 +114,21 @@ with a call to `NewSentryHook`. This can be changed by assigning a value to the 
 hook, _ := logrus_sentry.NewSentryHook(...)
 hook.Timeout = 20*time.Second
 ```
+
+## Enabling Stacktraces
+
+By default the hook will not send any stacktraces. However, this can be enabled
+with:
+
+```go
+hook, _ := logrus_sentry.NewSentryHook(...)
+hook.StacktraceConfiguration.Enable = true
+```
+
+Subsequent calls to `logger.Error` and above will create a stacktrace.
+
+Other configuration options are:
+- `StacktraceConfiguration.Level` the logrus level at which to start capturing stacktraces.
+- `StacktraceConfiguration.Skip` how many stack frames to skip before stacktrace starts recording.
+- `StacktraceConfiguration.Context` the number of lines to include around a stack frame for context.
+- `StacktraceConfiguration.InAppPrefixes` the prefixes that will be matched against the stack frame to identify it as in_app

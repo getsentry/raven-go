@@ -58,10 +58,27 @@ type SentryHook struct {
 	// Timeout sets the time to wait for a delivery error from the sentry server.
 	// If this is set to zero the server will not wait for any response and will
 	// consider the message correctly sent
-	Timeout time.Duration
+	Timeout                 time.Duration
+	StacktraceConfiguration stacktraceConfiguration
 
 	client *raven.Client
 	levels []logrus.Level
+}
+
+// stacktraceConfiguration allows for configuring stacktraces
+type stacktraceConfiguration struct {
+	// whether stacktraces should be enabled
+	Enable bool
+	// the level at which to start capturing stacktraces
+	Level logrus.Level
+	// how many stack frames to skip before stacktrace starts recording
+	Skip int
+	// the number of lines to include around a stack frame for context
+	Context int
+	// the prefixes that will be matched against the stack frame.
+	// if the stack frame's package matches one of these prefixes
+	// sentry will identify the stack frame as "in_app"
+	InAppPrefixes []string
 }
 
 // NewSentryHook creates a hook to be added to an instance of logger
@@ -72,7 +89,7 @@ func NewSentryHook(DSN string, levels []logrus.Level) (*SentryHook, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &SentryHook{100 * time.Millisecond, client, levels}, nil
+	return NewWithClientSentryHook(client, levels)
 }
 
 // NewWithTagsSentryHook creates a hook with tags to be added to an instance
@@ -83,13 +100,24 @@ func NewWithTagsSentryHook(DSN string, tags map[string]string, levels []logrus.L
 	if err != nil {
 		return nil, err
 	}
-	return &SentryHook{100 * time.Millisecond, client, levels}, nil
+	return NewWithClientSentryHook(client, levels)
 }
 
 // NewWithClientSentryHook creates a hook using an initialized raven client.
 // This method sets the timeout to 100 milliseconds.
 func NewWithClientSentryHook(client *raven.Client, levels []logrus.Level) (*SentryHook, error) {
-	return &SentryHook{100 * time.Millisecond, client, levels}, nil
+	return &SentryHook{
+		Timeout: 100 * time.Millisecond,
+		StacktraceConfiguration: stacktraceConfiguration{
+			Enable:        false,
+			Level:         logrus.ErrorLevel,
+			Skip:          5,
+			Context:       0,
+			InAppPrefixes: nil,
+		},
+		client: client,
+		levels: levels,
+	}, nil
 }
 
 // Called when an event should be sent to sentry
@@ -114,6 +142,11 @@ func (hook *SentryHook) Fire(entry *logrus.Entry) error {
 	}
 	if req, ok := getAndDelRequest(d, "http_request"); ok {
 		packet.Interfaces = append(packet.Interfaces, raven.NewHttp(req))
+	}
+	stConfig := &hook.StacktraceConfiguration
+	if stConfig.Enable && entry.Level <= stConfig.Level {
+		currentStacktrace := raven.NewStacktrace(stConfig.Skip, stConfig.Context, stConfig.InAppPrefixes)
+		packet.Interfaces = append(packet.Interfaces, currentStacktrace)
 	}
 	packet.Extra = map[string]interface{}(d)
 
