@@ -57,7 +57,7 @@ func TestStacktrace(t *testing.T) {
 	if f.Module != thisPackage {
 		t.Error("incorrect Module:", f.Module)
 	}
-	if f.Lineno != 83 {
+	if f.Lineno != 85 {
 		t.Error("incorrect Lineno:", f.Lineno)
 	}
 	if f.ContextLine != "\treturn NewStacktrace(0, 2, []string{thisPackage})" {
@@ -69,11 +69,13 @@ func TestStacktrace(t *testing.T) {
 	if len(f.PostContext) != 2 || f.PostContext[0] != "\t// b" || f.PostContext[1] != "}" {
 		t.Errorf("incorrect PostContext %#v", f.PostContext)
 	}
-	if !f.InApp {
+	_, filename, _, _ := runtime.Caller(0)
+	runningInVendored := strings.Contains(filename, "vendor")
+	if f.InApp != !runningInVendored {
 		t.Error("expected InApp to be true")
 	}
 
-	if st.Culprit() != fmt.Sprintf("%s.trace", thisPackage) {
+	if f.InApp && st.Culprit() != fmt.Sprintf("%s.trace", thisPackage) {
 		t.Error("incorrect Culprit:", st.Culprit())
 	}
 }
