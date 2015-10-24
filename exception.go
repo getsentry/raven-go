@@ -31,7 +31,7 @@ type Exception struct {
 	Stacktrace *Stacktrace `json:"stacktrace,omitempty"`
 }
 
-func (e *Exception) Class() string { return "sentry.interfaces.Exception" }
+func (e *Exception) Class() string { return "exception" }
 
 func (e *Exception) Culprit() string {
 	if e.Stacktrace == nil {
