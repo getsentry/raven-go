@@ -235,7 +235,9 @@ func (packet *Packet) JSON() []byte {
 
 	interfaces := make(map[string]Interface, len(packet.Interfaces))
 	for _, inter := range packet.Interfaces {
-		interfaces[inter.Class()] = inter
+		if inter != nil {
+			interfaces[inter.Class()] = inter
+		}
 	}
 
 	if len(interfaces) > 0 {
