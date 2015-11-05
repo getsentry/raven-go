@@ -1,4 +1,5 @@
 {
+  "support_level": "in-development",
   "platforms": {
     "go": {
       "name": "Go",

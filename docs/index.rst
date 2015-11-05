@@ -10,6 +10,13 @@
     Go
     ==
 
+.. sentry:support-warning::
+
+    The Go SDK is maintained and supported by Sentry but currently
+    under development.  Learn more about the project on `GitHub
+    <https://github.com/getsentry/raven-go>`__.
+
+
 Raven-Go provides a Sentry client implementation for the Go programming
 language.
 
