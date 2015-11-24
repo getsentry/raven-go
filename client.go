@@ -555,14 +555,16 @@ func CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interf
 }
 
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
-func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) {
+// If an error is captured, both the error and the reported Sentry error ID are returned.
+func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
 	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
 	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
 	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
 	// be completely noop though if we cared.
 	defer func() {
 		var packet *Packet
-		switch rval := recover().(type) {
+		err = recover()
+		switch rval := err.(type) {
 		case nil:
 			return
 		case error:
@@ -572,15 +574,17 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
 		}
 
-		client.Capture(packet, tags)
+		errorID, _ = client.Capture(packet, tags)
 	}()
 
 	f()
+	return
 }
 
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
-func CapturePanic(f func(), tags map[string]string, interfaces ...Interface) {
-	DefaultClient.CapturePanic(f, tags, interfaces...)
+// If an error is captured, both the error and the reported Sentry error ID are returned.
+func CapturePanic(f func(), tags map[string]string, interfaces ...Interface) (interface{}, string) {
+	return DefaultClient.CapturePanic(f, tags, interfaces...)
 }
 
 func (client *Client) Close() {
