@@ -59,14 +59,14 @@ type SentryHook struct {
 	// If this is set to zero the server will not wait for any response and will
 	// consider the message correctly sent
 	Timeout                 time.Duration
-	StacktraceConfiguration stacktraceConfiguration
+	StacktraceConfiguration StackTraceConfiguration
 
 	client *raven.Client
 	levels []logrus.Level
 }
 
-// stacktraceConfiguration allows for configuring stacktraces
-type stacktraceConfiguration struct {
+// StackTraceConfiguration allows for configuring stacktraces
+type StackTraceConfiguration struct {
 	// whether stacktraces should be enabled
 	Enable bool
 	// the level at which to start capturing stacktraces
@@ -108,7 +108,7 @@ func NewWithTagsSentryHook(DSN string, tags map[string]string, levels []logrus.L
 func NewWithClientSentryHook(client *raven.Client, levels []logrus.Level) (*SentryHook, error) {
 	return &SentryHook{
 		Timeout: 100 * time.Millisecond,
-		StacktraceConfiguration: stacktraceConfiguration{
+		StacktraceConfiguration: StackTraceConfiguration{
 			Enable:        false,
 			Level:         logrus.ErrorLevel,
 			Skip:          5,
