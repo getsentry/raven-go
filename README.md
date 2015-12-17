@@ -87,14 +87,21 @@ hook, err := NewWithClientSentryHook(client, []logrus.Level{
 
 ## Special fields
 
-Some logrus fields have a special meaning in this hook,
-these are `server_name`, `logger` and `http_request`.
-When logs are sent to sentry these fields are treated differently.
-- `server_name` (also known as hostname) is the name of the server which
-is logging the event (hostname.example.com)
-- `logger` is the part of the application which is logging the event.
-In go this usually means setting it to the name of the package.
-- `http_request` is the in-coming request(*http.Request). The detailed request data are sent to Sentry.
+Some logrus fields have a special meaning in this hook, and they will be especially processed by Sentry.
+
+
+| Field key  | Description |
+| ------------- | ------------- |
+| `event_id`  | Each logged event is identified by the `event_id`, which is hexadecimal string representing a UUID4 value. You can manually specify the identifier of a log event by supplying this field.  The `event_id` string should be in one of the following UUID format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` and `urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)|
+| `user_name`  | Name of the user who is in the context of the event  |
+| `user_email`  | Email of the user who is in the context of the event |
+| `user_id`  | ID of the user who is in the context of the event |
+| `user_ip`  | IP of the user who is in the context of the event |
+| `server_name`  | Also known as hostname, it is the name of the server which is logging the event (hostname.example.com)  |
+| `logger`  | `logger` is the part of the application which is logging the event. In go this usually means setting it to the name of the package. |
+| `http_request`  | `http_request` is the in-coming request(*http.Request). The detailed request data are sent to Sentry. |
+
+
 
 ## Timeout
 
