@@ -147,7 +147,7 @@ type Packet struct {
 	ServerName string                 `json:"server_name,omitempty"`
 	Release    string                 `json:"release,omitempty"`
 	Tags       Tags                   `json:"tags,omitempty"`
-	Modules    []map[string]string    `json:"modules,omitempty"`
+	Modules    map[string]string      `json:"modules,omitempty"`
 	Extra      map[string]interface{} `json:"extra,omitempty"`
 
 	Interfaces []Interface `json:"-"`
