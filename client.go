@@ -142,13 +142,14 @@ type Packet struct {
 	Logger    string    `json:"logger"`
 
 	// Optional
-	Platform   string                 `json:"platform,omitempty"`
-	Culprit    string                 `json:"culprit,omitempty"`
-	ServerName string                 `json:"server_name,omitempty"`
-	Release    string                 `json:"release,omitempty"`
-	Tags       Tags                   `json:"tags,omitempty"`
-	Modules    map[string]string      `json:"modules,omitempty"`
-	Extra      map[string]interface{} `json:"extra,omitempty"`
+	Platform    string                 `json:"platform,omitempty"`
+	Culprit     string                 `json:"culprit,omitempty"`
+	ServerName  string                 `json:"server_name,omitempty"`
+	Release     string                 `json:"release,omitempty"`
+	Tags        Tags                   `json:"tags,omitempty"`
+	Modules     map[string]string      `json:"modules,omitempty"`
+	Fingerprint string                 `json:"fingerprint,omitempty"`
+	Extra       map[string]interface{} `json:"extra,omitempty"`
 
 	Interfaces []Interface `json:"-"`
 }
