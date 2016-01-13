@@ -148,7 +148,7 @@ type Packet struct {
 	Release     string                 `json:"release,omitempty"`
 	Tags        Tags                   `json:"tags,omitempty"`
 	Modules     map[string]string      `json:"modules,omitempty"`
-	Fingerprint string                 `json:"fingerprint,omitempty"`
+	Fingerprint []string               `json:"fingerprint,omitempty"`
 	Extra       map[string]interface{} `json:"extra,omitempty"`
 
 	Interfaces []Interface `json:"-"`
