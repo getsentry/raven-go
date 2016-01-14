@@ -57,7 +57,12 @@ func getUserContext(d logrus.Fields) (*raven.User, bool) {
 		return nil, false
 	}
 
-	return &raven.User{id, username, email, ip}, true
+	return &raven.User{
+		ID:       id,
+		Username: username,
+		Email:    email,
+		IP:       ip,
+	}, true
 }
 
 func getAndDel(d logrus.Fields, key string) (string, bool) {
