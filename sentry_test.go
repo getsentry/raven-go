@@ -33,7 +33,7 @@ func getTestLogger() *logrus.Logger {
 // so need to explicitly construct one for purpose of test
 type resultPacket struct {
 	raven.Packet
-	Stacktrace raven.Stacktrace `json:stacktrace`
+	Stacktrace raven.Stacktrace `json:"stacktrace"`
 }
 
 func WithTestDSN(t *testing.T, tf func(string, <-chan *resultPacket)) {
@@ -206,7 +206,7 @@ func TestSentryStacktrace(t *testing.T) {
 			t.Errorf("File name should have ended with %s, was %s", expectedSuffix, lastFrame.Filename)
 		}
 		if lastFrame.Lineno != expectedLineno {
-			t.Errorf("Line number should have been %s, was %s", expectedLineno, lastFrame.Lineno)
+			t.Errorf("Line number should have been %d, was %d", expectedLineno, lastFrame.Lineno)
 		}
 		if lastFrame.InApp {
 			t.Error("Frame should not be identified as in_app without prefixes")

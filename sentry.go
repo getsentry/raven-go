@@ -20,37 +20,62 @@ var (
 	}
 )
 
-func getAndDel(d logrus.Fields, key string) (string, bool) {
-	var (
-		ok  bool
-		v   interface{}
-		val string
-	)
-	if v, ok = d[key]; !ok {
+func getEventID(d logrus.Fields) (string, bool) {
+	eventID, ok := d["event_id"].(string)
+
+	if !ok {
 		return "", false
 	}
 
-	if val, ok = v.(string); !ok {
+	//verify eventID is 32 characters hexadecimal string (UUID4)
+	uuid := parseUUID(eventID)
+
+	if uuid == nil {
 		return "", false
 	}
-	delete(d, key)
-	return val, true
+
+	return uuid.noDashString(), true
+}
+
+func getUserContext(d logrus.Fields) (*raven.User, bool) {
+	if v, ok := d["user"]; ok {
+		switch val := v.(type) {
+		case *raven.User:
+			return val, true
+
+		case raven.User:
+			return &val, true
+		}
+	}
+
+	username, _ := d["user_name"].(string)
+	email, _ := d["user_email"].(string)
+	id, _ := d["user_id"].(string)
+	ip, _ := d["user_ip"].(string)
+
+	if username == "" && email == "" && id == "" && ip == "" {
+		return nil, false
+	}
+
+	return &raven.User{id, username, email, ip}, true
+}
+
+func getAndDel(d logrus.Fields, key string) (string, bool) {
+	if value, ok := d[key].(string); ok {
+		delete(d, key)
+		return value, true
+	} else {
+		return "", false
+	}
 }
 
 func getAndDelRequest(d logrus.Fields, key string) (*http.Request, bool) {
-	var (
-		ok  bool
-		v   interface{}
-		req *http.Request
-	)
-	if v, ok = d[key]; !ok {
+	if value, ok := d[key].(*http.Request); ok {
+		delete(d, key)
+		return value, true
+	} else {
 		return nil, false
 	}
-	if req, ok = v.(*http.Request); !ok || req == nil {
-		return nil, false
-	}
-	delete(d, key)
-	return req, true
 }
 
 // SentryHook delivers logs to a sentry server.
@@ -142,6 +167,12 @@ func (hook *SentryHook) Fire(entry *logrus.Entry) error {
 	}
 	if req, ok := getAndDelRequest(d, "http_request"); ok {
 		packet.Interfaces = append(packet.Interfaces, raven.NewHttp(req))
+	}
+	if user, ok := getUserContext(d); ok {
+		packet.Interfaces = append(packet.Interfaces, user)
+	}
+	if eventID, ok := getEventID(d); ok {
+		packet.EventID = eventID
 	}
 	stConfig := &hook.StacktraceConfiguration
 	if stConfig.Enable && entry.Level <= stConfig.Level {
