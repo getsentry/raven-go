@@ -7,6 +7,7 @@ package raven
 
 import (
 	"bytes"
+	"fmt"
 	"go/build"
 	"io/ioutil"
 	"path/filepath"
@@ -47,6 +48,24 @@ type StacktraceFrame struct {
 	PreContext   []string `json:"pre_context,omitempty"`
 	PostContext  []string `json:"post_context,omitempty"`
 	InApp        bool     `json:"in_app"`
+}
+
+// Returns a string representation of the stacktrace similar do debug.Stack()
+func (s Stacktrace) String() string {
+	buff := &bytes.Buffer{}
+	for i := len(s.Frames) - 1; i >= 0; i-- {
+		f := s.Frames[i]
+		buff.WriteString(f.String())
+		buff.WriteString("\n")
+	}
+	return buff.String()
+}
+
+// Returns a string representation of the frame similar do debug.Stack()
+// /path/to/file.go:37
+//     funcName: lineContext("the line of code")
+func (f StacktraceFrame) String() string {
+	return fmt.Sprintf("%s:%d\n\t%s: %s", trimPath(f.Filename), f.Lineno, f.Function, f.ContextLine)
 }
 
 // Intialize and populate a new stacktrace, skipping skip frames.
