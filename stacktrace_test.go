@@ -133,3 +133,37 @@ func TestNewStacktrace_outOfBounds(t *testing.T) {
 		t.Errorf("incorrect ContextLine: %#v", f.ContextLine)
 	}
 }
+
+func TestStacktraceFrameString(t *testing.T) {
+	st := trace()
+	str := st.Frames[len(st.Frames)-1].String()
+	if !strings.Contains(str, "github.com/getsentry/raven-go/stacktrace_test.go:85") {
+		t.Errorf("frame.String() does not contain file and line no %s", str)
+	}
+
+	if !strings.Contains(str, "trace: 	return NewStacktrace(0, 2, []string{thisPackage})") {
+		t.Errorf("frame.String() does not contain function and line context %s", str)
+	}
+}
+
+func TestStacktraceString(t *testing.T) {
+	st := trace()
+	arr := strings.Split(st.String(), "\n")
+
+	if len(arr) != 7 {
+		t.Errorf("incorrect length: %d", len(arr))
+	}
+
+	if !strings.Contains(arr[0], "github.com/getsentry/raven-go/stacktrace_test.go:85") {
+		t.Errorf("unexpected 1st line from st.String(): %s", arr[0])
+	}
+	if !strings.Contains(arr[1], "trace: 	return NewStacktrace(0, 2, []string{thisPackage})") {
+		t.Errorf("unexpected 2nd line from st.String(): %s", arr[1])
+	}
+	if !strings.Contains(arr[2], "github.com/getsentry/raven-go/stacktrace_test.go:150") {
+		t.Errorf("unexpected 3rd line from st.String(): %s", arr[2])
+	}
+	if !strings.Contains(arr[3], "TestStacktraceString: 	st := trace()") {
+		t.Errorf("unexpected 4th line from st.String(): %s", arr[3])
+	}
+}
