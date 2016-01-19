@@ -5,10 +5,51 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"runtime/debug"
 	"strings"
 )
+
+const (
+	redaction = "********"
+)
+
+// Query fields whose value will redacted. Used by NewHttp.
+var QuerySecretFields = []string{"password", "passphrase", "passwd", "secret"}
+
+// Header fields whose value will redacted. Used by NewHttp.
+var HeaderSecretFields = []string{"Authorization"}
+
+func redactQuery(r *http.Request) string {
+	query := r.URL.Query()
+
+	for _, keyword := range QuerySecretFields {
+		for field := range query {
+			if field == keyword {
+				query[field] = []string{redaction}
+				break
+			}
+		}
+	}
+
+	return query.Encode()
+}
+
+func redactHeaders(r *http.Request) map[string]string {
+	headers := make(map[string]string, len(r.Header))
+
+	for k, v := range r.Header {
+		for _, field := range HeaderSecretFields {
+			if field == k {
+				rep := strings.Repeat(redaction+",", len(v))
+				headers[k] = rep[:len(rep)-1]
+				break
+			}
+			headers[k] = strings.Join(v, ",")
+		}
+	}
+
+	return headers
+}
 
 func NewHttp(req *http.Request) *Http {
 	proto := "http"
@@ -18,30 +59,15 @@ func NewHttp(req *http.Request) *Http {
 	h := &Http{
 		Method:  req.Method,
 		Cookies: req.Header.Get("Cookie"),
-		Query:   sanitizeQuery(req.URL.Query()).Encode(),
+		Query:   redactQuery(req),
 		URL:     proto + "://" + req.Host + req.URL.Path,
-		Headers: make(map[string]string, len(req.Header)),
+		Headers: redactHeaders(req),
 	}
 	if addr, port, err := net.SplitHostPort(req.RemoteAddr); err == nil {
 		h.Env = map[string]string{"REMOTE_ADDR": addr, "REMOTE_PORT": port}
 	}
-	for k, v := range req.Header {
-		h.Headers[k] = strings.Join(v, ",")
-	}
+
 	return h
-}
-
-var querySecretFields = []string{"password", "passphrase", "passwd", "secret"}
-
-func sanitizeQuery(query url.Values) url.Values {
-	for _, keyword := range querySecretFields {
-		for field := range query {
-			if strings.Contains(field, keyword) {
-				query[field] = []string{"********"}
-			}
-		}
-	}
-	return query
 }
 
 // http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Http
