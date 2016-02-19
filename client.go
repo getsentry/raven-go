@@ -218,6 +218,16 @@ func (packet *Packet) AddTags(tags map[string]string) {
 	}
 }
 
+func (packet *Packet) AddExtra(extra map[string]interface{}) {
+	if packet.Extra == nil {
+		packet.Extra = map[string]interface{}{}
+	}
+
+	for k, v := range extra {
+		packet.Extra[k] = v
+	}
+}
+
 func uuid() (string, error) {
 	id := make([]byte, 16)
 	_, err := io.ReadFull(rand.Reader, id)
