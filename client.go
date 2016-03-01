@@ -408,6 +408,7 @@ type Client struct {
 	release     string
 	environment string
 	sampleRate  float32
+	skipFrames  int
 
 	// default logger name (leave empty for 'root')
 	defaultLoggerName string
@@ -553,6 +554,15 @@ func (client *Client) worker() {
 		client.wg.Done()
 	}
 }
+
+func (client *Client) SetSkipFrames(skip int) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.skipFrames = skip
+}
+
+// SetSkipFrames for the default *Client
+func SetSkipFrames(skip int) { DefaultClient.SetSkipFrames(skip) }
 
 // Capture asynchronously delivers a packet to the Sentry server. It is a no-op
 // when client is nil. A channel is provided if it is important to check for a
@@ -709,7 +719,7 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 	extra := extractExtra(err)
 	cause := pkgErrors.Cause(err)
 
-	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1, 3, client.includePaths)))...)
+	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1+client.skipFrames, 3, client.includePaths)))...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -734,7 +744,7 @@ func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, int
 	extra := extractExtra(err)
 	cause := pkgErrors.Cause(err)
 
-	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1, 3, client.includePaths)))...)
+	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1+client.skipFrames, 3, client.includePaths)))...)
 	eventID, ch := client.Capture(packet, tags)
 	if eventID != "" {
 		<-ch
@@ -765,13 +775,13 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 			if client.shouldExcludeErr(rval.Error()) {
 				return
 			}
-			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
 			if client.shouldExcludeErr(rvalStr) {
 				return
 			}
-			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
 		}
 
 		errorID, _ = client.Capture(packet, tags)
@@ -803,13 +813,13 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 			if client.shouldExcludeErr(rval.Error()) {
 				return
 			}
-			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
 			if client.shouldExcludeErr(rvalStr) {
 				return
 			}
-			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
 		}
 
 		var ch chan error
