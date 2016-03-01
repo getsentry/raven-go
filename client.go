@@ -350,6 +350,7 @@ type Client struct {
 	authHeader   string
 	release      string
 	includePaths []string
+	skipFrames   int
 	queue        chan *outgoingPacket
 
 	// A WaitGroup to keep track of all currently in-progress captures
@@ -425,6 +426,15 @@ func (client *Client) worker() {
 		client.wg.Done()
 	}
 }
+
+func (client *Client) SetSkipFrames(skip int) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.skipFrames = skip
+}
+
+// SetSkipFrames for the default *Client
+func SetSkipFrames(skip int) { DefaultClient.SetSkipFrames(skip) }
 
 // Capture asynchronously delivers a packet to the Sentry server. It is a no-op
 // when client is nil. A channel is provided if it is important to check for a
@@ -525,7 +535,7 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 		return ""
 	}
 
-	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
+	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1+client.skipFrames, 3, client.includePaths)))...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -543,7 +553,7 @@ func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, int
 		return ""
 	}
 
-	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
+	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1+client.skipFrames, 3, client.includePaths)))...)
 	eventID, ch := client.Capture(packet, tags)
 	<-ch
 
@@ -569,10 +579,10 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 		case nil:
 			return
 		case error:
-			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
-			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
 		}
 
 		errorID, _ = client.Capture(packet, tags)
