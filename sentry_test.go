@@ -4,6 +4,7 @@ import (
 	"compress/zlib"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/getsentry/raven-go"
@@ -193,7 +195,7 @@ func TestSentryStacktrace(t *testing.T) {
 		hook.StacktraceConfiguration.Enable = true
 
 		logger.Error(message) // this is the call that the last frame of stacktrace should capture
-		expectedLineno := 195 //this should be the line number of the previous line
+		expectedLineno := 197 //this should be the line number of the previous line
 
 		packet = <-pch
 		stacktraceSize = len(packet.Stacktrace.Frames)
@@ -231,4 +233,28 @@ func TestSentryStacktrace(t *testing.T) {
 			t.Error("Frame should be identified as in_app")
 		}
 	})
+}
+
+func TestFormatExtraData(t *testing.T) {
+	fields := logrus.Fields{
+		"time_stamp":    time.Now(), // implements JSON marshaler
+		"time_duration": time.Hour,  // implements .String()
+		"err":           errors.New("this is a test error"),
+		"order":         13,
+	}
+
+	formatted := formatExtraData(fields)
+
+	if _, ok := formatted["time_stamp"].(time.Time); !ok {
+		t.Error("json.Marshaler field shound't change type")
+	}
+	if _, ok := formatted["time_duration"].(string); !ok {
+		t.Error("fmt.Stringer field should be converted to string")
+	}
+	if _, ok := formatted["err"].(string); !ok {
+		t.Error("error field should be converted to string")
+	}
+	if _, ok := formatted["order"].(int); !ok {
+		t.Error("int field shound't change type")
+	}
 }

@@ -1,6 +1,7 @@
 package logrus_sentry
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -150,6 +151,23 @@ func NewWithClientSentryHook(client *raven.Client, levels []logrus.Level) (*Sent
 	}, nil
 }
 
+func formatExtraData(fields logrus.Fields) (ret map[string]interface{}) {
+	ret = make(map[string]interface{}, len(fields))
+	for key, value := range fields {
+		switch value := value.(type) {
+		case json.Marshaler:
+			ret[key] = value
+		case error:
+			ret[key] = value.Error()
+		case fmt.Stringer:
+			ret[key] = value.String()
+		default:
+			ret[key] = value
+		}
+	}
+	return
+}
+
 // Called when an event should be sent to sentry
 // Special fields that sentry uses to give more information to the server
 // are extracted from entry.Data (if they are found)
@@ -184,7 +202,7 @@ func (hook *SentryHook) Fire(entry *logrus.Entry) error {
 		currentStacktrace := raven.NewStacktrace(stConfig.Skip, stConfig.Context, stConfig.InAppPrefixes)
 		packet.Interfaces = append(packet.Interfaces, currentStacktrace)
 	}
-	packet.Extra = map[string]interface{}(d)
+	packet.Extra = formatExtraData(d)
 
 	_, errCh := hook.client.Capture(packet, nil)
 	timeout := hook.Timeout
