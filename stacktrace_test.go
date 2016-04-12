@@ -133,3 +133,10 @@ func TestNewStacktrace_outOfBounds(t *testing.T) {
 		t.Errorf("incorrect ContextLine: %#v", f.ContextLine)
 	}
 }
+
+func TestNewStacktrace_noFrames(t *testing.T) {
+	st := NewStacktrace(999999999, 0, []string{})
+	if st != nil {
+		t.Errorf("expected st.Frames to be nil:", st)
+	}
+}
