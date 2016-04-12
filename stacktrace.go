@@ -69,6 +69,14 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 			frames = append(frames, frame)
 		}
 	}
+	// If there are no frames, the entire stacktrace is nil
+	if len(frames) == 0 {
+		return nil
+	}
+	// Optimize the path where there's only 1 frame
+	if len(frames) == 1 {
+		return &Stacktrace{frames}
+	}
 	// Sentry wants the frames with the oldest first, so reverse them
 	for i, j := 0, len(frames)-1; i < j; i, j = i+1, j-1 {
 		frames[i], frames[j] = frames[j], frames[i]
