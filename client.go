@@ -129,7 +129,7 @@ func (t *Tags) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
+// https://docs.getsentry.com/hosted/clientdev/#building-the-json-packet
 type Packet struct {
 	// Required
 	Message string `json:"message"`
