@@ -29,6 +29,7 @@ const (
 var (
 	ErrPacketDropped         = errors.New("raven: packet dropped")
 	ErrUnableToUnmarshalJSON = errors.New("raven: unable to unmarshal JSON")
+	ErrEmptyDSN              = errors.New("raven: dsn is empty")
 	ErrMissingUser           = errors.New("raven: dsn missing public key and/or password")
 	ErrMissingPrivateKey     = errors.New("raven: dsn missing private key")
 	ErrMissingProjectID      = errors.New("raven: dsn missing project id")
@@ -365,7 +366,7 @@ var DefaultClient = newClient(nil)
 // concurrently with calls to Report and Send.
 func (client *Client) SetDSN(dsn string) error {
 	if dsn == "" {
-		return nil
+		return ErrEmptyDSN
 	}
 
 	client.mu.Lock()
@@ -664,12 +665,11 @@ type HTTPTransport struct {
 }
 
 func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
-	if url == "" {
-		return nil
-	}
-
 	body, contentType := serializedPacket(packet)
-	req, _ := http.NewRequest("POST", url, body)
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return err
+	}
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", contentType)
