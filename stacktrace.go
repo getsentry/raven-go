@@ -15,7 +15,7 @@ import (
 	"sync"
 )
 
-// http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Stacktrace
+// https://docs.getsentry.com/hosted/clientdev/interfaces/#failure-interfaces
 type Stacktrace struct {
 	// Required
 	Frames []*StacktraceFrame `json:"frames"`

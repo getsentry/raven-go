@@ -44,7 +44,7 @@ func sanitizeQuery(query url.Values) url.Values {
 	return query
 }
 
-// http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Http
+// https://docs.getsentry.com/hosted/clientdev/interfaces/#context-interfaces
 type Http struct {
 	// Required
 	URL    string `json:"url"`
