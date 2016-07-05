@@ -75,6 +75,15 @@ func getAndDel(d logrus.Fields, key string) (string, bool) {
 	}
 }
 
+func getAndDelError(d logrus.Fields, key string) (error, bool) {
+	if value, ok := d[key].(error); ok {
+		delete(d, key)
+		return value, true
+	} else {
+		return nil, false
+	}
+}
+
 func getAndDelRequest(d logrus.Fields, key string) (*http.Request, bool) {
 	if value, ok := d[key].(*http.Request); ok {
 		delete(d, key)
@@ -171,7 +180,7 @@ func formatExtraData(fields logrus.Fields) (ret map[string]interface{}) {
 // Called when an event should be sent to sentry
 // Special fields that sentry uses to give more information to the server
 // are extracted from entry.Data (if they are found)
-// These fields are: logger, server_name and http_request
+// These fields are: error, logger, server_name and http_request
 func (hook *SentryHook) Fire(entry *logrus.Entry) error {
 	packet := &raven.Packet{
 		Message:   entry.Message,
@@ -197,11 +206,19 @@ func (hook *SentryHook) Fire(entry *logrus.Entry) error {
 	if eventID, ok := getEventID(d); ok {
 		packet.EventID = eventID
 	}
+
 	stConfig := &hook.StacktraceConfiguration
 	if stConfig.Enable && entry.Level <= stConfig.Level {
 		currentStacktrace := raven.NewStacktrace(stConfig.Skip, stConfig.Context, stConfig.InAppPrefixes)
-		packet.Interfaces = append(packet.Interfaces, currentStacktrace)
+		if err, ok := getAndDelError(d, logrus.ErrorKey); ok {
+			exc := raven.NewException(err, currentStacktrace)
+			packet.Interfaces = append(packet.Interfaces, exc)
+			packet.Culprit = err.Error()
+		} else {
+			packet.Interfaces = append(packet.Interfaces, currentStacktrace)
+		}
 	}
+
 	packet.Extra = formatExtraData(d)
 
 	_, errCh := hook.client.Capture(packet, nil)
