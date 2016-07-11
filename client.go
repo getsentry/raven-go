@@ -304,12 +304,14 @@ func newClient(tags map[string]string) *Client {
 		context:   &context{},
 		queue:     make(chan *outgoingPacket, MaxQueueBuffer),
 	}
+	go client.worker()
+	client.SetDSN(os.Getenv("SENTRY_DSN"))
 	return client
 }
 
 // New constructs a new Sentry client instance.
 //
-// Caller must call client.SetDSN("") to clean up client after use.
+// Caller must call Close to clean up client after use.
 func New(dsn string) (*Client, error) {
 	client := newClient(nil)
 	return client, client.SetDSN(dsn)
@@ -317,7 +319,7 @@ func New(dsn string) (*Client, error) {
 
 // NewWithTags constructs a new Sentry client instance with default tags.
 //
-// Caller must call client.SetDSN("") to clean up client after use.
+// Caller must call Close to clean up client after use.
 func NewWithTags(dsn string, tags map[string]string) (*Client, error) {
 	client := newClient(tags)
 	return client, client.SetDSN(dsn)
@@ -328,7 +330,7 @@ func NewWithTags(dsn string, tags map[string]string) (*Client, error) {
 //
 // Deprecated: use New and NewWithTags instead
 //
-// Caller must call client.SetDSN("") to clean up client after use.
+// Caller must call Close to clean up client after use.
 func NewClient(dsn string, tags map[string]string) (*Client, error) {
 	client := newClient(tags)
 	return client, client.SetDSN(dsn)
@@ -367,11 +369,8 @@ var DefaultClient = newClient(nil)
 
 // SetDSN updates a client with a new DSN. It safe to call after and
 // concurrently with calls to Report and Send.
-//
-// Caller must call client.SetDSN("") to clean up client after use.
 func (client *Client) SetDSN(dsn string) error {
 	if dsn == "" {
-		close(client.queue)
 		return nil
 	}
 
@@ -411,8 +410,6 @@ func (client *Client) SetDSN(dsn string) error {
 }
 
 // Sets the DSN for the default *Client instance
-//
-// Caller must call SetDSN("") to clean up client after use.
 func SetDSN(dsn string) error { return DefaultClient.SetDSN(dsn) }
 
 // SetRelease sets the "release" tag.

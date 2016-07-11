@@ -18,7 +18,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer client.SetDSN("")
+	defer client.Close()
 	httpReq, _ := http.NewRequest("GET", "http://example.com/foo?bar=true", nil)
 	httpReq.RemoteAddr = "127.0.0.1:80"
 	httpReq.Header = http.Header{"Content-Type": {"text/html"}, "Content-Length": {"42"}}
@@ -36,7 +36,7 @@ func CheckError(err error, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer client.SetDSN("")
+	defer client.Close()
 	packet := raven.NewPacket(err.Error(), raven.NewException(err, trace()), raven.NewHttp(r))
 	eventID, _ := client.Capture(packet, nil)
 	message := fmt.Sprintf("Error event with id \"%s\" - %s", eventID, err.Error())
