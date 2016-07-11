@@ -304,8 +304,6 @@ func newClient(tags map[string]string) *Client {
 		context:   &context{},
 		queue:     make(chan *outgoingPacket, MaxQueueBuffer),
 	}
-	go client.worker()
-	client.SetDSN(os.Getenv("SENTRY_DSN"))
 	return client
 }
 
@@ -398,6 +396,8 @@ func (client *Client) SetDSN(dsn string) error {
 	client.url = uri.String()
 
 	client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
+
+	go client.worker()
 
 	return nil
 }
