@@ -3,6 +3,7 @@ package raven
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -71,6 +72,7 @@ func RecoveryHandler(handler func(http.ResponseWriter, *http.Request)) func(http
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rval := recover(); rval != nil {
+				log.Print(rval)
 				debug.PrintStack()
 				rvalStr := fmt.Sprint(rval)
 				packet := NewPacket(rvalStr, NewException(errors.New(rvalStr), NewStacktrace(2, 3, nil)), NewHttp(r))
