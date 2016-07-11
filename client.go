@@ -365,6 +365,7 @@ var DefaultClient = newClient(nil)
 // concurrently with calls to Report and Send.
 func (client *Client) SetDSN(dsn string) error {
 	if dsn == "" {
+		close(client.queue)
 		return nil
 	}
 
