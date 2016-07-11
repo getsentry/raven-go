@@ -404,8 +404,6 @@ func (client *Client) SetDSN(dsn string) error {
 
 	client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
 
-	go client.worker()
-
 	return nil
 }
 
