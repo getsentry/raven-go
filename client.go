@@ -146,6 +146,7 @@ type Packet struct {
 	Culprit     string                 `json:"culprit,omitempty"`
 	ServerName  string                 `json:"server_name,omitempty"`
 	Release     string                 `json:"release,omitempty"`
+	Environment string                 `json:"environment,omitempty"`
 	Tags        Tags                   `json:"tags,omitempty"`
 	Modules     map[string]string      `json:"modules,omitempty"`
 	Fingerprint []string               `json:"fingerprint,omitempty"`
@@ -349,6 +350,7 @@ type Client struct {
 	projectID    string
 	authHeader   string
 	release      string
+	environment  string
 	includePaths []string
 	queue        chan *outgoingPacket
 
@@ -411,8 +413,18 @@ func (client *Client) SetRelease(release string) {
 	client.release = release
 }
 
+// SetEnvironment sets the "environment" tag.
+func (client *Client) SetEnvironment(environment string) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.environment = environment
+}
+
 // SetRelease sets the "release" tag on the default *Client
 func SetRelease(release string) { DefaultClient.SetRelease(release) }
+
+// SetEnvironment sets the "environment" tag on the default *Client
+func SetEnvironment(environment string) { DefaultClient.SetEnvironment(environment) }
 
 func (client *Client) worker() {
 	for outgoingPacket := range client.queue {
@@ -450,6 +462,7 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	client.mu.RLock()
 	projectID := client.projectID
 	release := client.release
+	environment := client.environment
 	client.mu.RUnlock()
 
 	err := packet.Init(projectID)
@@ -458,7 +471,9 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 		client.wg.Done()
 		return
 	}
+
 	packet.Release = release
+	packet.Environment = environment
 
 	outgoingPacket := &outgoingPacket{packet, ch}
 
