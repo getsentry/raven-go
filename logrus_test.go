@@ -194,7 +194,7 @@ func TestSentryStacktrace(t *testing.T) {
 		hook.StacktraceConfiguration.Enable = true
 
 		logger.Error(message) // this is the call that the last frame of stacktrace should capture
-		expectedLineno := 197 //this should be the line number of the previous line
+		expectedLineno := 196 //this should be the line number of the previous line
 
 		packet = <-pch
 		stacktraceSize = len(packet.Stacktrace.Frames)
@@ -202,7 +202,7 @@ func TestSentryStacktrace(t *testing.T) {
 			t.Error("Stacktrace should not be empty")
 		}
 		lastFrame := packet.Stacktrace.Frames[stacktraceSize-1]
-		expectedSuffix := "logrus_sentry/sentry_test.go"
+		expectedSuffix := "raven-go/logrus_test.go"
 		if !strings.HasSuffix(lastFrame.Filename, expectedSuffix) {
 			t.Errorf("File name should have ended with %s, was %s", expectedSuffix, lastFrame.Filename)
 		}
