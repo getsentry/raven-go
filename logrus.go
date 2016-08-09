@@ -1,4 +1,4 @@
-package logrus_sentry
+package raven
 
 import (
 	"encoding/json"
@@ -7,17 +7,16 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/getsentry/raven-go"
 )
 
 var (
-	severityMap = map[logrus.Level]raven.Severity{
-		logrus.DebugLevel: raven.DEBUG,
-		logrus.InfoLevel:  raven.INFO,
-		logrus.WarnLevel:  raven.WARNING,
-		logrus.ErrorLevel: raven.ERROR,
-		logrus.FatalLevel: raven.FATAL,
-		logrus.PanicLevel: raven.FATAL,
+	severityMap = map[logrus.Level]Severity{
+		logrus.DebugLevel: DEBUG,
+		logrus.InfoLevel:  INFO,
+		logrus.WarnLevel:  WARNING,
+		logrus.ErrorLevel: ERROR,
+		logrus.FatalLevel: FATAL,
+		logrus.PanicLevel: FATAL,
 	}
 )
 
@@ -38,13 +37,13 @@ func getEventID(d logrus.Fields) (string, bool) {
 	return uuid.noDashString(), true
 }
 
-func getUserContext(d logrus.Fields) (*raven.User, bool) {
+func getUserContext(d logrus.Fields) (*User, bool) {
 	if v, ok := d["user"]; ok {
 		switch val := v.(type) {
-		case *raven.User:
+		case *User:
 			return val, true
 
-		case raven.User:
+		case User:
 			return &val, true
 		}
 	}
@@ -58,7 +57,7 @@ func getUserContext(d logrus.Fields) (*raven.User, bool) {
 		return nil, false
 	}
 
-	return &raven.User{
+	return &User{
 		ID:       id,
 		Username: username,
 		Email:    email,
@@ -101,7 +100,7 @@ type SentryHook struct {
 	Timeout                 time.Duration
 	StacktraceConfiguration StackTraceConfiguration
 
-	client *raven.Client
+	client *Client
 	levels []logrus.Level
 }
 
@@ -125,7 +124,7 @@ type StackTraceConfiguration struct {
 // and initializes the raven client.
 // This method sets the timeout to 100 milliseconds.
 func NewSentryHook(DSN string, levels []logrus.Level) (*SentryHook, error) {
-	client, err := raven.New(DSN)
+	client, err := New(DSN)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +135,7 @@ func NewSentryHook(DSN string, levels []logrus.Level) (*SentryHook, error) {
 // of logger and initializes the raven client. This method sets the timeout to
 // 100 milliseconds.
 func NewWithTagsSentryHook(DSN string, tags map[string]string, levels []logrus.Level) (*SentryHook, error) {
-	client, err := raven.NewWithTags(DSN, tags)
+	client, err := NewWithTags(DSN, tags)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +144,7 @@ func NewWithTagsSentryHook(DSN string, tags map[string]string, levels []logrus.L
 
 // NewWithClientSentryHook creates a hook using an initialized raven client.
 // This method sets the timeout to 100 milliseconds.
-func NewWithClientSentryHook(client *raven.Client, levels []logrus.Level) (*SentryHook, error) {
+func NewWithClientSentryHook(client *Client, levels []logrus.Level) (*SentryHook, error) {
 	return &SentryHook{
 		Timeout: 100 * time.Millisecond,
 		StacktraceConfiguration: StackTraceConfiguration{
@@ -182,9 +181,9 @@ func formatExtraData(fields logrus.Fields) (ret map[string]interface{}) {
 // are extracted from entry.Data (if they are found)
 // These fields are: error, logger, server_name and http_request
 func (hook *SentryHook) Fire(entry *logrus.Entry) error {
-	packet := &raven.Packet{
+	packet := &Packet{
 		Message:   entry.Message,
-		Timestamp: raven.Timestamp(entry.Time),
+		Timestamp: Timestamp(entry.Time),
 		Level:     severityMap[entry.Level],
 		Platform:  "go",
 	}
@@ -198,7 +197,7 @@ func (hook *SentryHook) Fire(entry *logrus.Entry) error {
 		packet.ServerName = serverName
 	}
 	if req, ok := getAndDelRequest(d, "http_request"); ok {
-		packet.Interfaces = append(packet.Interfaces, raven.NewHttp(req))
+		packet.Interfaces = append(packet.Interfaces, NewHttp(req))
 	}
 	if user, ok := getUserContext(d); ok {
 		packet.Interfaces = append(packet.Interfaces, user)
@@ -209,9 +208,9 @@ func (hook *SentryHook) Fire(entry *logrus.Entry) error {
 
 	stConfig := &hook.StacktraceConfiguration
 	if stConfig.Enable && entry.Level <= stConfig.Level {
-		currentStacktrace := raven.NewStacktrace(stConfig.Skip, stConfig.Context, stConfig.InAppPrefixes)
+		currentStacktrace := NewStacktrace(stConfig.Skip, stConfig.Context, stConfig.InAppPrefixes)
 		if err, ok := getAndDelError(d, logrus.ErrorKey); ok {
-			exc := raven.NewException(err, currentStacktrace)
+			exc := NewException(err, currentStacktrace)
 			packet.Interfaces = append(packet.Interfaces, exc)
 			packet.Culprit = err.Error()
 		} else {

@@ -1,4 +1,4 @@
-package logrus_sentry
+package raven
 
 import (
 	"fmt"

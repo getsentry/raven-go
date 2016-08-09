@@ -1,4 +1,4 @@
-package logrus_sentry
+package raven
 
 import (
 	"compress/zlib"
@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/getsentry/raven-go"
 )
 
 const (
@@ -31,11 +30,11 @@ func getTestLogger() *logrus.Logger {
 	return l
 }
 
-// raven.Packet does not have a json directive for deserializing stacktrace
+// Packet does not have a json directive for deserializing stacktrace
 // so need to explicitly construct one for purpose of test
 type resultPacket struct {
-	raven.Packet
-	Stacktrace raven.Stacktrace `json:"stacktrace"`
+	Packet
+	Stacktrace Stacktrace `json:"stacktrace"`
 }
 
 func WithTestDSN(t *testing.T, tf func(string, <-chan *resultPacket)) {
@@ -124,7 +123,7 @@ func TestSentryWithClient(t *testing.T) {
 	WithTestDSN(t, func(dsn string, pch <-chan *resultPacket) {
 		logger := getTestLogger()
 
-		client, _ := raven.New(dsn)
+		client, _ := New(dsn)
 
 		hook, err := NewWithClientSentryHook(client, []logrus.Level{
 			logrus.ErrorLevel,
@@ -161,8 +160,8 @@ func TestSentryTags(t *testing.T) {
 
 		logger.Error(message)
 		packet := <-pch
-		expected := raven.Tags{
-			raven.Tag{
+		expected := Tags{
+			Tag{
 				Key:   "site",
 				Value: "test",
 			},
