@@ -721,6 +721,7 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Origin", "")
 	res, err := t.Http.Do(req)
 	if err != nil {
 		return err
