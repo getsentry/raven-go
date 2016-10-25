@@ -236,8 +236,11 @@ func uuid() (string, error) {
 	return hex.EncodeToString(id), nil
 }
 
-func (packet *Packet) JSON() []byte {
-	packetJSON, _ := json.Marshal(packet)
+func (packet *Packet) JSON() ([]byte, error) {
+	packetJSON, err := json.Marshal(packet)
+	if err != nil {
+		return nil, err
+	}
 
 	interfaces := make(map[string]Interface, len(packet.Interfaces))
 	for _, inter := range packet.Interfaces {
@@ -247,12 +250,15 @@ func (packet *Packet) JSON() []byte {
 	}
 
 	if len(interfaces) > 0 {
-		interfaceJSON, _ := json.Marshal(interfaces)
+		interfaceJSON, err := json.Marshal(interfaces)
+		if err != nil {
+			return nil, err
+		}
 		packetJSON[len(packetJSON)-1] = ','
 		packetJSON = append(packetJSON, interfaceJSON[1:]...)
 	}
 
-	return packetJSON
+	return packetJSON, nil
 }
 
 type context struct {
@@ -735,8 +741,14 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 		return nil
 	}
 
-	body, contentType := serializedPacket(packet)
-	req, _ := http.NewRequest("POST", url, body)
+	body, contentType, err := serializedPacket(packet)
+	if err != nil {
+		return fmt.Errorf("error serializing packet: %v", err)
+	}
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return fmt.Errorf("can't create new request: %v", err)
+	}
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", contentType)
@@ -752,8 +764,11 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	return nil
 }
 
-func serializedPacket(packet *Packet) (r io.Reader, contentType string) {
-	packetJSON := packet.JSON()
+func serializedPacket(packet *Packet) (io.Reader, string, error) {
+	packetJSON, err := packet.JSON()
+	if err != nil {
+		return nil, "", fmt.Errorf("error marshaling packet %+v to JSON: %v", packet, err)
+	}
 
 	// Only deflate/base64 the packet if it is bigger than 1KB, as there is
 	// overhead.
@@ -764,9 +779,9 @@ func serializedPacket(packet *Packet) (r io.Reader, contentType string) {
 		deflate.Write(packetJSON)
 		deflate.Close()
 		b64.Close()
-		return buf, "application/octet-stream"
+		return buf, "application/octet-stream", nil
 	}
-	return bytes.NewReader(packetJSON), "application/json"
+	return bytes.NewReader(packetJSON), "application/json", nil
 }
 
 var hostname string
