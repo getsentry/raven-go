@@ -248,7 +248,9 @@ func (packet *Packet) JSON() []byte {
 
 	if len(interfaces) > 0 {
 		interfaceJSON, _ := json.Marshal(interfaces)
-		packetJSON[len(packetJSON)-1] = ','
+		if len(packetJSON) > 1 {
+			packetJSON[len(packetJSON)-1] = ','
+		}
 		packetJSON = append(packetJSON, interfaceJSON[1:]...)
 	}
 
