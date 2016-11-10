@@ -655,6 +655,32 @@ func CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interfa
 	return DefaultClient.CapturePanicAndWait(f, tags, interfaces...)
 }
 
+func CaptureRawPanic(panicErr interface{}, tags map[string]string, interfaces ...Interface) string {
+	return DefaultClient.CaptureRawPanic(panicErr, tags, interfaces...)
+}
+
+// Call in recover block
+func (client *Client) CaptureRawPanic(panicErr interface{}, tags map[string]string, interfaces ...Interface)  string {
+	var packet *Packet
+	switch rval := panicErr.(type) {
+	case nil:
+		return ""
+	case error:
+		packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
+	default:
+		rvalStr := fmt.Sprint(rval)
+		packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
+	}
+	if tags == nil {
+		tags = map[string]string{"level":"panic"}
+	} else {
+		tags["level"] = "panic"
+	}
+
+	errorID, _ := client.Capture(packet, tags)
+	return errorID
+}
+
 func (client *Client) Close() {
 	close(client.queue)
 }
