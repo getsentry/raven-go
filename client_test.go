@@ -35,7 +35,11 @@ func TestPacketJSON(t *testing.T) {
 	packet.AddTags(map[string]string{"baz": "buzz"})
 
 	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00.00","level":"error","logger":"com.getsentry.raven-go.logger-test-packet-json","platform":"linux","culprit":"caused_by","server_name":"host1","release":"721e41770371db95eee98ca2707686226b993eda","environment":"production","tags":[["foo","bar"],["foo","foo"],["baz","buzz"]],"modules":{"foo":"bar"},"fingerprint":["{{ default }}","a-custom-fingerprint"],"logentry":{"message":"foo"}}`
-	actual := string(packet.JSON())
+	j, err := packet.JSON()
+	if err != nil {
+		t.Fatalf("JSON marshalling should not fail: %v", err)
+	}
+	actual := string(j)
 
 	if actual != expected {
 		t.Errorf("incorrect json; got %s, want %s", actual, expected)
@@ -62,7 +66,11 @@ func TestPacketJSONNilInterface(t *testing.T) {
 	}
 
 	expected := `{"message":"test","event_id":"2","project":"1","timestamp":"2000-01-01T00:00:00.00","level":"error","logger":"com.getsentry.raven-go.logger-test-packet-json","platform":"linux","culprit":"caused_by","server_name":"host1","release":"721e41770371db95eee98ca2707686226b993eda","environment":"production","tags":[["foo","bar"]],"modules":{"foo":"bar"},"fingerprint":["{{ default }}","a-custom-fingerprint"],"logentry":{"message":"foo"}}`
-	actual := string(packet.JSON())
+	j, err := packet.JSON()
+	if err != nil {
+		t.Fatalf("JSON marshalling should not fail: %v", err)
+	}
+	actual := string(j)
 
 	if actual != expected {
 		t.Errorf("incorrect json; got %s, want %s", actual, expected)
