@@ -330,7 +330,6 @@ func newClient(tags map[string]string) *Client {
 		context:   &context{},
 		queue:     make(chan *outgoingPacket, MaxQueueBuffer),
 	}
-	go client.worker()
 	client.SetDSN(os.Getenv("SENTRY_DSN"))
 	return client
 }
@@ -383,6 +382,9 @@ type Client struct {
 	// This is intended to be used with Client.Wait() to assure that
 	// all messages have been transported before exiting the process.
 	wg sync.WaitGroup
+
+	// A Once to track only starting up the background worker once
+	start sync.Once
 }
 
 // Initialize a default *Client instance
@@ -501,6 +503,12 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	packet.Environment = environment
 
 	outgoingPacket := &outgoingPacket{packet, ch}
+
+	// Lazily start background worker until we
+	// do our first write into the queue.
+	client.start.Do(func() {
+		go client.worker()
+	})
 
 	select {
 	case client.queue <- outgoingPacket:
