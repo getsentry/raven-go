@@ -15,6 +15,19 @@ import (
 	"sync"
 )
 
+var (
+	// FileFilter is a function that alters the file names reported in stack
+	// traces.
+	//
+	// It is mostly useful when an app has different build and runtime
+	// locations (e.g. apps deployed on Heroku), to make sure that source
+	// files are correct at runtime, which allows stacktraces to have a
+	// correct context.
+	//
+	// This is nil by default, which means that it does nothing.
+	FileFilter func(string) string
+)
+
 // https://docs.getsentry.com/hosted/clientdev/interfaces/#failure-interfaces
 type Stacktrace struct {
 	// Required
@@ -63,6 +76,9 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 		pc, file, line, ok := runtime.Caller(i)
 		if !ok {
 			break
+		}
+		if FileFilter != nil {
+			file = FileFilter(file)
 		}
 		frame := NewStacktraceFrame(pc, file, line, context, appPackagePrefixes)
 		if frame != nil {
