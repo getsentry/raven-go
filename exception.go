@@ -39,3 +39,10 @@ func (e *Exception) Culprit() string {
 	}
 	return e.Stacktrace.Culprit()
 }
+
+type Exceptions struct {
+	// Required
+	Values []*Exception `json:"values"`
+}
+
+func (es Exceptions) Class() string { return "exception" }
