@@ -392,6 +392,32 @@ type Client struct {
 // Initialize a default *Client instance
 var DefaultClient = newClient(nil)
 
+func (c *Client) SetIgnoreErrors(errs []string) error {
+	newRegexps := make([]*regexp.Regexp, 0, len(errs))
+	var err error
+	for _, errStr := range errs {
+		var r *regexp.Regexp
+		if r, err = regexp.Compile(errStr); err != nil {
+			return fmt.Errorf("failed to compile regexp for %q: %v", errStr, err)
+		}
+		newRegexps = append(newRegexps, r)
+	}
+	c.ignoreErrors = append(c.ignoreErrors, newRegexps...)
+	return nil
+}
+
+func (c *Client) shouldExcludeErr(errStr string) bool {
+	for _, r := range c.ignoreErrors {
+		if r.MatchString(strings.ToLower(errStr)) {
+			return true
+		}
+	}
+	return false
+}
+func SetIgnoreErrors(errs []string) error {
+	return DefaultClient.SetIgnoreErrors(errs)
+}
+
 // SetDSN updates a client with a new DSN. It safe to call after and
 // concurrently with calls to Report and Send.
 func (client *Client) SetDSN(dsn string) error {
@@ -430,29 +456,6 @@ func (client *Client) SetDSN(dsn string) error {
 	client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
 
 	return nil
-}
-
-func (c *Client) SetIgnoreErrors(errs []string) error {
-	newRegexps := make([]*regexp.Regexp, 0, len(errs))
-	var err error
-	for _, errStr := range errs {
-		var r *regexp.Regexp
-		if r, err = regexp.Compile(errStr); err != nil {
-			return fmt.Errorf("failed to compile regexp for %q: %v", errStr, err)
-		}
-		newRegexps = append(newRegexps, r)
-	}
-	c.ignoreErrors = append(c.ignoreErrors, newRegexps...)
-	return nil
-}
-
-func (c *Client) shouldExcludeErr(errStr string) bool {
-	for _, r := range c.ignoreErrors {
-		if r.MatchString(strings.ToLower(errStr)) {
-			return true
-		}
-	}
-	return false
 }
 
 // Sets the DSN for the default *Client instance
