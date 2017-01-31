@@ -414,7 +414,7 @@ func (c *Client) shouldExcludeErr(errStr string) bool {
 	}
 	return false
 }
-func SetIgnoreErrors(errs []string) error {
+func SetIgnoreErrors(errs ...string) error {
 	return DefaultClient.SetIgnoreErrors(errs)
 }
 
