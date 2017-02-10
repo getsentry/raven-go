@@ -393,12 +393,7 @@ type Client struct {
 var DefaultClient = newClient(nil)
 
 func (c *Client) SetIgnoreErrors(errs []string) error {
-	sources := make([]string, 0, len(errs))
-	for _, err := range errs {
-		sources = append(sources, err)
-	}
-
-	joinedRegexp := strings.Join(sources, "|")
+	joinedRegexp := strings.Join(errs, "|")
 	r, err := regexp.Compile(joinedRegexp)
 	if err != nil {
 		return fmt.Errorf("failed to compile regexp %q for %q: %v", joinedRegexp, errs, err)
