@@ -13,7 +13,7 @@ func (t *testInterface) Class() string   { return "sentry.interfaces.Test" }
 func (t *testInterface) Culprit() string { return "codez" }
 
 func TestShouldExcludeErr(t *testing.T) {
-	regexpStrs := []string{"timeout", "should.exclude"}
+	regexpStrs := []string{"ERR_TIMEOUT", "should.exclude", "(?i)^big$"}
 
 	client := &Client{
 		Transport: newTransport(),
@@ -27,9 +27,9 @@ func TestShouldExcludeErr(t *testing.T) {
 	}
 
 	testCases := []string{
-		"there was a timeout in handlers.go",
-		"ERR_TIMEOUT",
+		"there was a ERR_TIMEOUT in handlers.go",
 		"do not log should.exclude at all",
+		"BIG",
 	}
 
 	for _, tc := range testCases {

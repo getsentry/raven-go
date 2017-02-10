@@ -255,7 +255,7 @@ func (packet *Packet) JSON() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		packetJSON[len(packetJSON) - 1] = ','
+		packetJSON[len(packetJSON)-1] = ','
 		packetJSON = append(packetJSON, interfaceJSON[1:]...)
 	}
 
@@ -370,15 +370,15 @@ type Client struct {
 	// Context that will get appending to all packets
 	context *context
 
-	mu           sync.RWMutex
-	url          string
-	projectID    string
-	authHeader   string
-	release      string
-	environment  string
-	includePaths []string
-	ignoreErrors []*regexp.Regexp
-	queue        chan *outgoingPacket
+	mu                 sync.RWMutex
+	url                string
+	projectID          string
+	authHeader         string
+	release            string
+	environment        string
+	includePaths       []string
+	ignoreErrorsRegexp *regexp.Regexp
+	queue              chan *outgoingPacket
 
 	// A WaitGroup to keep track of all currently in-progress captures
 	// This is intended to be used with Client.Wait() to assure that
@@ -393,24 +393,24 @@ type Client struct {
 var DefaultClient = newClient(nil)
 
 func (c *Client) SetIgnoreErrors(errs []string) error {
-	newRegexps := make([]*regexp.Regexp, 0, len(errs))
-	var err error
-	for _, errStr := range errs {
-		var r *regexp.Regexp
-		if r, err = regexp.Compile(errStr); err != nil {
-			return fmt.Errorf("failed to compile regexp for %q: %v", errStr, err)
-		}
-		newRegexps = append(newRegexps, r)
+	sources := make([]string, 0, len(errs))
+	for _, err := range errs {
+		sources = append(sources, err)
 	}
-	c.ignoreErrors = append(c.ignoreErrors, newRegexps...)
+
+	joinedRegexp := strings.Join(sources, "|")
+	r, err := regexp.Compile(joinedRegexp)
+	if err != nil {
+		return fmt.Errorf("failed to compile regexp %q for %q: %v", joinedRegexp, errs, err)
+	}
+
+	c.ignoreErrorsRegexp = r
 	return nil
 }
 
 func (c *Client) shouldExcludeErr(errStr string) bool {
-	for _, r := range c.ignoreErrors {
-		if r.MatchString(strings.ToLower(errStr)) {
-			return true
-		}
+	if c.ignoreErrorsRegexp.MatchString(errStr) {
+		return true
 	}
 	return false
 }
@@ -444,8 +444,8 @@ func (client *Client) SetDSN(dsn string) error {
 	uri.User = nil
 
 	if idx := strings.LastIndex(uri.Path, "/"); idx != -1 {
-		client.projectID = uri.Path[idx + 1:]
-		uri.Path = uri.Path[:idx + 1] + "api/" + client.projectID + "/store/"
+		client.projectID = uri.Path[idx+1:]
+		uri.Path = uri.Path[:idx+1] + "api/" + client.projectID + "/store/"
 	}
 	if client.projectID == "" {
 		return ErrMissingProjectID
