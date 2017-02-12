@@ -399,12 +399,16 @@ func (c *Client) SetIgnoreErrors(errs []string) error {
 		return fmt.Errorf("failed to compile regexp %q for %q: %v", joinedRegexp, errs, err)
 	}
 
+	c.mu.Lock()
 	c.ignoreErrorsRegexp = r
+	c.mu.Unlock()
 	return nil
 }
 
 func (c *Client) shouldExcludeErr(errStr string) bool {
-	if c.ignoreErrorsRegexp.MatchString(errStr) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.ignoreErrorsRegexp != nil && c.ignoreErrorsRegexp.MatchString(errStr) {
 		return true
 	}
 	return false
