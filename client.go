@@ -484,6 +484,7 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	packet.AddTags(captureTags)
 	packet.AddTags(client.Tags)
 	packet.AddTags(client.context.tags)
+	packet.Interfaces = append(packet.Interfaces, client.context.interfaces()...)
 
 	// Initialize any required packet fields
 	client.mu.RLock()
@@ -537,7 +538,7 @@ func (client *Client) CaptureMessage(message string, tags map[string]string, int
 		return ""
 	}
 
-	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
+	packet := NewPacket(message, append(interfaces, &Message{message, nil})...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -554,7 +555,7 @@ func (client *Client) CaptureMessageAndWait(message string, tags map[string]stri
 		return ""
 	}
 
-	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
+	packet := NewPacket(message, append(interfaces, &Message{message, nil})...)
 	eventID, ch := client.Capture(packet, tags)
 	<-ch
 
@@ -573,7 +574,7 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 		return ""
 	}
 
-	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
+	packet := NewPacket(err.Error(), append(interfaces, NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -591,7 +592,7 @@ func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, int
 		return ""
 	}
 
-	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
+	packet := NewPacket(err.Error(), append(interfaces, NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
 	eventID, ch := client.Capture(packet, tags)
 	<-ch
 
@@ -617,10 +618,10 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 		case nil:
 			return
 		case error:
-			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rval.Error(), append(interfaces, NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
-			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rvalStr, append(interfaces, NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
 		}
 
 		errorID, _ = client.Capture(packet, tags)
@@ -649,10 +650,10 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 		case nil:
 			return
 		case error:
-			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rval.Error(), append(interfaces, NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
-			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rvalStr, append(interfaces, NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
 		}
 
 		var ch chan error
