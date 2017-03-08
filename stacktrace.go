@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"go/build"
 	"io/ioutil"
+	"net/url"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -94,7 +95,7 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 // be considered "in app".
 func NewStacktraceFrame(pc uintptr, file string, line, context int, appPackagePrefixes []string) *StacktraceFrame {
 	frame := &StacktraceFrame{AbsolutePath: file, Filename: trimPath(file), Lineno: line, InApp: false}
-	frame.Module, frame.Function = functionName(pc)
+	frame.Module, frame.Function = functionName(pc, file)
 
 	// `runtime.goexit` is effectively a placeholder that comes from
 	// runtime/asm_amd64.s and is meaningless.
@@ -136,22 +137,46 @@ func NewStacktraceFrame(pc uintptr, file string, line, context int, appPackagePr
 }
 
 // Retrieve the name of the package and function containing the PC.
-func functionName(pc uintptr) (pack string, name string) {
+func functionName(pc uintptr, filePath string) (pack string, name string) {
 	fn := runtime.FuncForPC(pc)
 	if fn == nil {
 		return
 	}
-	name = fn.Name()
-	// We get this:
-	//	runtime/debug.*T·ptrmethod
-	// and want this:
-	//  pack = runtime/debug
-	//	name = *T.ptrmethod
-	if idx := strings.LastIndex(name, "."); idx != -1 {
-		pack = name[:idx]
-		name = name[idx+1:]
+
+	return extractFunctionName(filePath, fn.Name())
+}
+
+// extractFunctionName extracts the package and function from the information
+// given by runtime.
+//
+// We get this:
+//	runtime/debug.*T.ptrmethod
+// and want this:
+//	pack = runtime/debug
+//	name = *T.ptrmethod
+//
+// If the extraction fails, pack = "", name = funcName.
+func extractFunctionName(filePath, funcName string) (pack, name string) {
+	if f, err := url.PathUnescape(funcName); err != nil {
+		return "", funcName
+	} else {
+		funcName = f
 	}
-	name = strings.Replace(name, "·", ".", -1)
+
+	if strings.HasPrefix(funcName, "main.") {
+		return "main", funcName[5:]
+	}
+
+	dir, _ := filepath.Split(filePath)
+	packName := filepath.Base(dir)
+
+	if i := strings.LastIndex(funcName, packName); i == -1 {
+		pack, name = "", funcName
+	} else {
+		pack = funcName[:i+len(packName)]
+		name = funcName[i+len(packName)+1:]
+	}
+
 	return
 }
 

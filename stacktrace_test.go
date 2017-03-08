@@ -25,8 +25,8 @@ var (
 
 func TestFunctionName(t *testing.T) {
 	for _, test := range functionNameTests {
-		pc, _, _, _ := runtime.Caller(test.skip)
-		pack, name := functionName(pc)
+		pc, filePath, _, _ := runtime.Caller(test.skip)
+		pack, name := functionName(pc, filePath)
 
 		if pack != test.pack {
 			t.Errorf("incorrect package; got %s, want %s", pack, test.pack)
@@ -142,7 +142,6 @@ func TestNewStacktrace_noFrames(t *testing.T) {
 		t.Errorf("expected st.Frames to be nil:", st)
 	}
 }
-
 func TestFileContext(t *testing.T) {
 	// reset the cache
 	fileCache = make(map[string][][]byte)
@@ -183,6 +182,57 @@ func TestFileContext(t *testing.T) {
 		}
 		if len(fileCache) != i+1 {
 			t.Errorf("%d: result was not cached; len(fileCached)=%d", i, len(fileCache))
+		}
+	}
+}
+
+func TestExtractFunctionName(t *testing.T) {
+	testCases := []struct {
+		filePath     string
+		funcName     string
+		expectedPack string
+		expectedName string
+	}{
+		{
+			filePath:     "GOPATH/src/github.com/getsentry/dash-package/file.go",
+			funcName:     "github.com/getsentry/dash-package.(*Struct).Method",
+			expectedPack: "github.com/getsentry/dash-package",
+			expectedName: "(*Struct).Method",
+		},
+		{
+			filePath:     "GOPATH/src/github.com/getsentry/dot.package/file.go",
+			funcName:     `github.com/getsentry/dot%2epackage.(*Struct).Method`,
+			expectedPack: "github.com/getsentry/dot.package",
+			expectedName: "(*Struct).Method",
+		},
+		{
+			filePath:     "GOPATH/src/github.com/getsentry/cmd/file.go",
+			funcName:     "main.(*Struct).Method",
+			expectedPack: "main",
+			expectedName: "(*Struct).Method",
+		},
+		{
+			filePath:     "GOPATH/src/github.com/getsentry/dot.package/file.go",
+			funcName:     `github.com/getsentry/dot%package.(*Struct).Method`,
+			expectedPack: "",
+			expectedName: "github.com/getsentry/dot%package.(*Struct).Method",
+		},
+		{
+			filePath:     "GOPATH/src/github.com/getsentry/dot.package/file.go",
+			funcName:     `github.com/getsentry/package.(*Struct).Method`,
+			expectedPack: "",
+			expectedName: "github.com/getsentry/package.(*Struct).Method",
+		},
+	}
+
+	for _, tc := range testCases {
+		actualPack, actualName := extractFunctionName(tc.filePath, tc.funcName)
+
+		if actualPack != tc.expectedPack {
+			t.Errorf("incorrect pack; got %s, want %s", actualPack, tc.expectedPack)
+		}
+		if actualName != tc.expectedName {
+			t.Errorf("incorrect name; got %s, want %s", actualName, tc.expectedName)
 		}
 	}
 }
