@@ -12,6 +12,33 @@ type testInterface struct{}
 func (t *testInterface) Class() string   { return "sentry.interfaces.Test" }
 func (t *testInterface) Culprit() string { return "codez" }
 
+func TestShouldExcludeErr(t *testing.T) {
+	regexpStrs := []string{"ERR_TIMEOUT", "should.exclude", "(?i)^big$"}
+
+	client := &Client{
+		Transport: newTransport(),
+		Tags:      nil,
+		context:   &context{},
+		queue:     make(chan *outgoingPacket, MaxQueueBuffer),
+	}
+
+	if err := client.SetIgnoreErrors(regexpStrs); err != nil {
+		t.Fatalf("invalid regexps %v: %v", regexpStrs, err)
+	}
+
+	testCases := []string{
+		"there was a ERR_TIMEOUT in handlers.go",
+		"do not log should.exclude at all",
+		"BIG",
+	}
+
+	for _, tc := range testCases {
+		if !client.shouldExcludeErr(tc) {
+			t.Fatalf("failed to exclude err %q with regexps %v", tc, regexpStrs)
+		}
+	}
+}
+
 func TestPacketJSON(t *testing.T) {
 	packet := &Packet{
 		Project:     "1",

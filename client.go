@@ -16,6 +16,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"os"
 	"runtime"
 	"strings"
@@ -369,14 +370,15 @@ type Client struct {
 	// Context that will get appending to all packets
 	context *context
 
-	mu           sync.RWMutex
-	url          string
-	projectID    string
-	authHeader   string
-	release      string
-	environment  string
-	includePaths []string
-	queue        chan *outgoingPacket
+	mu                 sync.RWMutex
+	url                string
+	projectID          string
+	authHeader         string
+	release            string
+	environment        string
+	includePaths       []string
+	ignoreErrorsRegexp *regexp.Regexp
+	queue              chan *outgoingPacket
 
 	// A WaitGroup to keep track of all currently in-progress captures
 	// This is intended to be used with Client.Wait() to assure that
@@ -389,6 +391,29 @@ type Client struct {
 
 // Initialize a default *Client instance
 var DefaultClient = newClient(nil)
+
+func (c *Client) SetIgnoreErrors(errs []string) error {
+	joinedRegexp := strings.Join(errs, "|")
+	r, err := regexp.Compile(joinedRegexp)
+	if err != nil {
+		return fmt.Errorf("failed to compile regexp %q for %q: %v", joinedRegexp, errs, err)
+	}
+
+	c.mu.Lock()
+	c.ignoreErrorsRegexp = r
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *Client) shouldExcludeErr(errStr string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ignoreErrorsRegexp != nil && c.ignoreErrorsRegexp.MatchString(errStr)
+}
+
+func SetIgnoreErrors(errs ...string) error {
+	return DefaultClient.SetIgnoreErrors(errs)
+}
 
 // SetDSN updates a client with a new DSN. It safe to call after and
 // concurrently with calls to Report and Send.
@@ -473,6 +498,10 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 		return
 	}
 
+	if client.shouldExcludeErr(packet.Message) {
+		return
+	}
+
 	// Keep track of all running Captures so that we can wait for them all to finish
 	// *Must* call client.wg.Done() on any path that indicates that an event was
 	// finished being acted upon, whether success or failure
@@ -537,6 +566,10 @@ func (client *Client) CaptureMessage(message string, tags map[string]string, int
 		return ""
 	}
 
+	if client.shouldExcludeErr(message) {
+		return ""
+	}
+
 	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
 	eventID, _ := client.Capture(packet, tags)
 
@@ -551,6 +584,10 @@ func CaptureMessage(message string, tags map[string]string, interfaces ...Interf
 // CaptureMessageAndWait is identical to CaptureMessage except it blocks and waits for the message to be sent.
 func (client *Client) CaptureMessageAndWait(message string, tags map[string]string, interfaces ...Interface) string {
 	if client == nil {
+		return ""
+	}
+
+	if client.shouldExcludeErr(message) {
 		return ""
 	}
 
@@ -573,6 +610,10 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 		return ""
 	}
 
+	if client.shouldExcludeErr(err.Error()) {
+		return ""
+	}
+
 	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
 	eventID, _ := client.Capture(packet, tags)
 
@@ -588,6 +629,10 @@ func CaptureError(err error, tags map[string]string, interfaces ...Interface) st
 // CaptureErrorAndWait is identical to CaptureError, except it blocks and assures that the event was sent
 func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interface) string {
 	if client == nil {
+		return ""
+	}
+
+	if client.shouldExcludeErr(err.Error()) {
 		return ""
 	}
 
@@ -617,9 +662,15 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 		case nil:
 			return
 		case error:
+			if client.shouldExcludeErr(rval.Error()) {
+				return
+			}
 			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
+			if client.shouldExcludeErr(rvalStr) {
+				return
+			}
 			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
 		}
 
@@ -649,9 +700,15 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 		case nil:
 			return
 		case error:
+			if client.shouldExcludeErr(rval.Error()) {
+				return
+			}
 			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
+			if client.shouldExcludeErr(rvalStr) {
+				return
+			}
 			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
 		}
 
