@@ -408,11 +408,9 @@ func (c *Client) SetIgnoreErrors(errs []string) error {
 func (c *Client) shouldExcludeErr(errStr string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if c.ignoreErrorsRegexp != nil && c.ignoreErrorsRegexp.MatchString(errStr) {
-		return true
-	}
-	return false
+	return c.ignoreErrorsRegexp != nil && c.ignoreErrorsRegexp.MatchString(errStr)
 }
+
 func SetIgnoreErrors(errs ...string) error {
 	return DefaultClient.SetIgnoreErrors(errs)
 }
