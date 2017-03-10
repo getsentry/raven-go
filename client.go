@@ -16,8 +16,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -51,6 +51,14 @@ const (
 )
 
 type Timestamp time.Time
+
+// return by Capture for nil clients
+var closedChan chan error
+
+func init() {
+	closedChan = make(chan error)
+	close(closedChan)
+}
 
 func (t Timestamp) MarshalJSON() ([]byte, error) {
 	return []byte(time.Time(t).UTC().Format(timestampFormat)), nil
@@ -495,7 +503,10 @@ func (client *Client) worker() {
 // send's success.
 func (client *Client) Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
 	if client == nil {
-		return
+		if client == nil {
+			// return a chan that always returns nil when the caller receives from it
+			return "", closedChan
+		}
 	}
 
 	if client.shouldExcludeErr(packet.Message) {
