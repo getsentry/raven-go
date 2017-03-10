@@ -52,14 +52,6 @@ const (
 
 type Timestamp time.Time
 
-// return by Capture for nil clients
-var closedChan chan error
-
-func init() {
-	closedChan = make(chan error)
-	close(closedChan)
-}
-
 func (t Timestamp) MarshalJSON() ([]byte, error) {
 	return []byte(time.Time(t).UTC().Format(timestampFormat)), nil
 }
@@ -502,11 +494,12 @@ func (client *Client) worker() {
 // when client is nil. A channel is provided if it is important to check for a
 // send's success.
 func (client *Client) Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
+	ch = make(chan error, 1)
+
 	if client == nil {
-		if client == nil {
-			// return a chan that always returns nil when the caller receives from it
-			return "", closedChan
-		}
+		// return a chan that always returns nil when the caller receives from it
+		close(ch)
+		return
 	}
 
 	if client.shouldExcludeErr(packet.Message) {
@@ -517,8 +510,6 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	// *Must* call client.wg.Done() on any path that indicates that an event was
 	// finished being acted upon, whether success or failure
 	client.wg.Add(1)
-
-	ch = make(chan error, 1)
 
 	// Merge capture tags and client tags
 	packet.AddTags(captureTags)
