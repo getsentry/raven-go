@@ -165,6 +165,10 @@ func fileContext(filename string, line, context int) ([][]byte, int) {
 	if !ok {
 		data, err := ioutil.ReadFile(filename)
 		if err != nil {
+			// cache errors as nil slice: code below handles it correctly
+			// otherwise when missing the source or running as a different user, we try
+			// reading the file on each error which is unnecessary
+			fileCache[filename] = nil
 			return nil, 0
 		}
 		lines = bytes.Split(data, []byte{'\n'})
