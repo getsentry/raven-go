@@ -174,6 +174,12 @@ func fileContext(filename string, line, context int) ([][]byte, int) {
 		lines = bytes.Split(data, []byte{'\n'})
 		fileCache[filename] = lines
 	}
+
+	if lines == nil {
+		// cached error from ReadFile: return no lines
+		return nil, 0
+	}
+
 	line-- // stack trace lines are 1-indexed
 	start := line - context
 	var idx int
