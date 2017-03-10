@@ -213,3 +213,16 @@ func TestUnmarshalTimestamp(t *testing.T) {
 		t.Errorf("incorrect string; got %s, want %s", actual, expected)
 	}
 }
+
+func TestNilClient(t *testing.T) {
+	var client *Client = nil
+	eventID, ch := client.Capture(nil, nil)
+	if eventID != "" {
+		t.Error("expected empty eventID:", eventID)
+	}
+	// wait on ch: no send should succeed immediately
+	err := <-ch
+	if err != nil {
+		t.Error("expected nil err:", err)
+	}
+}
