@@ -3,10 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/getsentry/raven-go"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/Zumata/raven"
 )
 
 func trace() *raven.Stacktrace {
