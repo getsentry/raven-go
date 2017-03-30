@@ -367,6 +367,9 @@ type Client struct {
 	// DropHandler is called when a packet is dropped because the buffer is full.
 	DropHandler func(*Packet)
 
+	// default logger name (leave empty for 'root')
+	DefaultLoggerName string
+
 	// Context that will get appending to all packets
 	context *context
 
@@ -521,7 +524,13 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	projectID := client.projectID
 	release := client.release
 	environment := client.environment
+	defaultLoggerName := client.DefaultLoggerName
 	client.mu.RUnlock()
+
+	// set the global logger name on the packet if we must
+	if packet.Logger == "" && defaultLoggerName != "" {
+		packet.Logger = defaultLoggerName
+	}
 
 	err := packet.Init(projectID)
 	if err != nil {
