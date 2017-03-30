@@ -371,12 +371,16 @@ type Client struct {
 	// Context that will get appending to all packets
 	context *context
 
-	mu                 sync.RWMutex
-	url                string
-	projectID          string
-	authHeader         string
-	release            string
-	environment        string
+	mu          sync.RWMutex
+	url         string
+	projectID   string
+	authHeader  string
+	release     string
+	environment string
+
+	// default logger name (leave empty for 'root')
+	defaultLoggerName string
+
 	includePaths       []string
 	ignoreErrorsRegexp *regexp.Regexp
 	queue              chan *outgoingPacket
@@ -473,11 +477,23 @@ func (client *Client) SetEnvironment(environment string) {
 	client.environment = environment
 }
 
+// SetDefaultLoggerName sets the default logger name.
+func (client *Client) SetDefaultLoggerName(name string) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.defaultLoggerName = name
+}
+
 // SetRelease sets the "release" tag on the default *Client
 func SetRelease(release string) { DefaultClient.SetRelease(release) }
 
 // SetEnvironment sets the "environment" tag on the default *Client
 func SetEnvironment(environment string) { DefaultClient.SetEnvironment(environment) }
+
+// SetDefaultLoggerName sets the "defaultLoggerName" on the default *Client
+func SetDefaultLoggerName(name string) {
+	DefaultClient.SetDefaultLoggerName(name)
+}
 
 func (client *Client) worker() {
 	for outgoingPacket := range client.queue {
@@ -522,7 +538,13 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	projectID := client.projectID
 	release := client.release
 	environment := client.environment
+	defaultLoggerName := client.defaultLoggerName
 	client.mu.RUnlock()
+
+	// set the global logger name on the packet if we must
+	if packet.Logger == "" && defaultLoggerName != "" {
+		packet.Logger = defaultLoggerName
+	}
 
 	err := packet.Init(projectID)
 	if err != nil {
