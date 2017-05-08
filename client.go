@@ -728,6 +728,85 @@ func CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interfa
 	return DefaultClient.CapturePanicAndWait(f, tags, interfaces...)
 }
 
+// ReportPanic reports a panic to the Sentry server if it occurs and allows that panic to continue.
+func (client *Client) ReportPanic(tags map[string]string, interfaces ...Interface) {
+	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
+	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
+	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
+	// be completely noop though if we cared.
+
+	err := recover()
+	if err == nil {
+		return
+	}
+
+	var packet *Packet
+	switch rval := err.(type) {
+	case nil:
+		return
+	case error:
+		if client.shouldExcludeErr(rval.Error()) {
+			return
+		}
+		packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
+	default:
+		rvalStr := fmt.Sprint(rval)
+		if client.shouldExcludeErr(rvalStr) {
+			return
+		}
+		packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
+	}
+
+	client.Capture(packet, tags)
+	// send the panic up the stack
+	panic(err)
+}
+
+// ReportPanic reports a panic to the Sentry server if it occurs and allows that panic to continue.
+func ReportPanic(tags map[string]string, interfaces ...Interface) {
+	DefaultClient.ReportPanic(tags, interfaces...)
+}
+
+// ReportPanicAndWait is identical to ReportPanic, except it blocks and assures that the event was sent.
+func (client *Client) ReportPanicAndWait(tags map[string]string, interfaces ...Interface) {
+	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
+	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
+	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
+	// be completely noop though if we cared.
+
+	err := recover()
+	if err == nil {
+		return
+	}
+
+	var packet *Packet
+	switch rval := err.(type) {
+	case nil:
+		return
+	case error:
+		if client.shouldExcludeErr(rval.Error()) {
+			return
+		}
+		packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
+	default:
+		rvalStr := fmt.Sprint(rval)
+		if client.shouldExcludeErr(rvalStr) {
+			return
+		}
+		packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
+	}
+	_, ch := client.Capture(packet, tags)
+	// block to make sure the report is sent
+	<-ch
+	// send the panic up the stack
+	panic(err)
+}
+
+// ReportPanicAndWait is identical to ReportPanic, except it blocks and assures that the event was sent.
+func ReportPanicAndWait(tags map[string]string, interfaces ...Interface) {
+	DefaultClient.ReportPanicAndWait(tags, interfaces...)
+}
+
 func (client *Client) Close() {
 	close(client.queue)
 }
