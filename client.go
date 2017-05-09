@@ -729,17 +729,11 @@ func CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interfa
 }
 
 // ReportPanic reports a panic to the Sentry server if it occurs and allows that panic to continue.
-func (client *Client) ReportPanic(tags map[string]string, interfaces ...Interface) {
+func (client *Client) ReportPanic(err interface{}, tags map[string]string, interfaces ...Interface) {
 	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
 	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
 	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
 	// be completely noop though if we cared.
-
-	err := recover()
-	if err == nil {
-		return
-	}
-
 	var packet *Packet
 	switch rval := err.(type) {
 	case nil:
@@ -764,20 +758,19 @@ func (client *Client) ReportPanic(tags map[string]string, interfaces ...Interfac
 
 // ReportPanic reports a panic to the Sentry server if it occurs and allows that panic to continue.
 func ReportPanic(tags map[string]string, interfaces ...Interface) {
-	DefaultClient.ReportPanic(tags, interfaces...)
-}
-
-// ReportPanicAndWait is identical to ReportPanic, except it blocks and assures that the event was sent.
-func (client *Client) ReportPanicAndWait(tags map[string]string, interfaces ...Interface) {
-	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
-	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
-	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
-	// be completely noop though if we cared.
-
 	err := recover()
 	if err == nil {
 		return
 	}
+	DefaultClient.ReportPanic(err, tags, interfaces...)
+}
+
+// ReportPanicAndWait is identical to ReportPanic, except it blocks and assures that the event was sent.
+func (client *Client) ReportPanicAndWait(err interface{}, tags map[string]string, interfaces ...Interface) {
+	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
+	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
+	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
+	// be completely noop though if we cared.
 
 	var packet *Packet
 	switch rval := err.(type) {
@@ -804,7 +797,11 @@ func (client *Client) ReportPanicAndWait(tags map[string]string, interfaces ...I
 
 // ReportPanicAndWait is identical to ReportPanic, except it blocks and assures that the event was sent.
 func ReportPanicAndWait(tags map[string]string, interfaces ...Interface) {
-	DefaultClient.ReportPanicAndWait(tags, interfaces...)
+	err := recover()
+	if err == nil {
+		return
+	}
+	DefaultClient.ReportPanicAndWait(err, tags, interfaces...)
 }
 
 func (client *Client) Close() {
