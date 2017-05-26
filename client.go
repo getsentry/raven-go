@@ -647,6 +647,13 @@ func (client *Client) CaptureErrorWithExtra(err error, tags map[string]string, e
 
 }
 
+// CaptureErrorWithExtra formats and delivers an error to the Sentry server
+// Adds a stacktarce to the packet, excluding the call to this method
+// In addtion also adds the extras properties passed in param
+func CaptureErrorWithExtra(err error, tags map[string]string, extras map[string]interface{}, interfaces ...Interface) string {
+	return DefaultClient.CaptureErrorWithExtra(err, tags, extras, interfaces...)
+}
+
 // CaptureErrors formats and delivers an error to the Sentry server using the default *Client.
 // Adds a stacktrace to the packet, excluding the call to this method.
 func CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
