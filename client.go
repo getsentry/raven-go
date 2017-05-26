@@ -317,7 +317,7 @@ func newTransport() Transport {
 	} else {
 		t.Client = &http.Client{
 			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
+				Proxy:           http.ProxyFromEnvironment,
 				TLSClientConfig: &tls.Config{RootCAs: rootCAs},
 			},
 		}
@@ -621,6 +621,30 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
+}
+
+// CaptureErrorWithExtra formats and delivers an error to the Sentry server
+// Adds a stacktarce to the packet, excluding the call to this method
+// In addtion also adds the extras properties passed in param
+func (client *Client) CaptureErrorWithExtra(err error, tags map[string]string, extras map[string]interface{}, interfaces ...Interface) string {
+	if client == nil {
+		return ""
+	}
+
+	if client.shouldExcludeErr(err.Error()) {
+		return ""
+	}
+
+	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
+
+	for k, v := range extras {
+		packet.Extra[k] = v
+	}
+
+	eventID, _ := client.Capture(packet, tags)
+
+	return eventID
+
 }
 
 // CaptureErrors formats and delivers an error to the Sentry server using the default *Client.
