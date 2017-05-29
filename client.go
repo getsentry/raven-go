@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -23,7 +24,6 @@ import (
 	"time"
 
 	"github.com/certifi/gocertifi"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -617,33 +617,7 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 		return ""
 	}
 
-	var stacktrace *Stacktrace
-	stacktracer, errHasStacktrace := err.(interface {
-		StackTrace() errors.StackTrace
-	})
-	if errHasStacktrace {
-		var frames []*StacktraceFrame
-		for _, f := range stacktracer.StackTrace() {
-			pc := uintptr(f) - 1
-			fn := runtime.FuncForPC(pc)
-			var file string
-			var line int
-			if fn != nil {
-				file, line = fn.FileLine(pc)
-			} else {
-				file = "unknown"
-			}
-			frame := NewStacktraceFrame(pc, file, line, 3, client.IncludePaths())
-			if frame != nil {
-				frames = append([]*StacktraceFrame{frame}, frames...)
-			}
-		}
-		stacktrace = &Stacktrace{Frames: frames}
-	} else {
-		stacktrace = NewStacktrace(1, 3, client.includePaths)
-	}
-
-	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, stacktrace))...)
+	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, GetOrNewStacktrace(err, 1, 3, client.includePaths)))...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
