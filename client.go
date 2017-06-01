@@ -223,6 +223,13 @@ func (packet *Packet) AddTags(tags map[string]string) {
 		packet.Tags = append(packet.Tags, Tag{k, v})
 	}
 }
+func (packet *Packet) AddExtra(extra map[string]string) {
+	for k, v := range extra {
+		// NOTE: Merge the argument `extra` into the existing ones.
+		// This is to keep useful default `extra`.
+		packet.Extra[k] = v
+	}
+}
 
 func uuid() (string, error) {
 	id := make([]byte, 16)
@@ -490,10 +497,10 @@ func (client *Client) worker() {
 	}
 }
 
-// Capture asynchronously delivers a packet to the Sentry server. It is a no-op
-// when client is nil. A channel is provided if it is important to check for a
-// send's success.
-func (client *Client) Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
+// CaptureWithExtra asynchronously delivers a packet to the Sentry server.
+// It is a no-op when client is nil. A channel is provided if it is important to check for a send's success.
+// The difference between Capture and CaptureWithExtra is that the later provides the option to specify Extra key-values to send to Sentry.
+func (client *Client) CaptureWithExtra(packet *Packet, captureTags map[string]string, captureExtra map[string]string) (eventID string, ch chan error) {
 	ch = make(chan error, 1)
 
 	if client == nil {
@@ -515,6 +522,8 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	packet.AddTags(captureTags)
 	packet.AddTags(client.Tags)
 	packet.AddTags(client.context.tags)
+
+	packet.AddExtra(captureExtra)
 
 	// Initialize any required packet fields
 	client.mu.RLock()
@@ -555,15 +564,28 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	return packet.EventID, ch
 }
 
+// CaptureWithExtra asynchronously delivers a packet to the Sentry server with the default *Client.
+// It is a no-op when client is nil. A channel is provided if it is important to check for a send's success.
+// The difference between Capture and CaptureWithExtra is that the later provides the option to specify Extra key-values to send to Sentry.
+func CaptureWithExtra(packet *Packet, captureTags map[string]string, captureExtra map[string]string) (eventID string, ch chan error) {
+	return DefaultClient.CaptureWithExtra(packet, captureTags, captureExtra)
+}
+
 // Capture asynchronously delivers a packet to the Sentry server with the default *Client.
-// It is a no-op when client is nil. A channel is provided if it is important to check for a
-// send's success.
+// It is a no-op when client is nil. A channel is provided if it is important to check for a send's success.
+func (client *Client) Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
+	return client.CaptureWithExtra(packet, captureTags, nil)
+}
+
+// Capture asynchronously delivers a packet to the Sentry server with the default *Client.
+// It is a no-op when client is nil. A channel is provided if it is important to check for a send's success.
 func Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
 	return DefaultClient.Capture(packet, captureTags)
 }
 
-// CaptureMessage formats and delivers a string message to the Sentry server.
-func (client *Client) CaptureMessage(message string, tags map[string]string, interfaces ...Interface) string {
+// CaptureMessageWithExtra formats and delivers a string message to the Sentry server.
+// The difference between CaptureMessage and CaptureMessageWithExtra is that the later provides the option to specify Extra key-values to send to Sentry.
+func (client *Client) CaptureMessageWithExtra(message string, tags map[string]string, extra map[string]string, interfaces ...Interface) string {
 	if client == nil {
 		return ""
 	}
@@ -573,9 +595,20 @@ func (client *Client) CaptureMessage(message string, tags map[string]string, int
 	}
 
 	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
-	eventID, _ := client.Capture(packet, tags)
+	eventID, _ := client.CaptureWithExtra(packet, tags, extra)
 
 	return eventID
+}
+
+// CaptureMessageWithExtra formats and delivers a string message to the Sentry server.
+// The difference between CaptureMessage and CaptureMessageWithExtra is that the later provides the option to specify Extra key-values to send to Sentry.
+func CaptureMessageWithExtra(message string, tags map[string]string, extra map[string]string, interfaces ...Interface) string {
+	return DefaultClient.CaptureMessageWithExtra(message, tags, extra, interfaces...)
+}
+
+// CaptureMessage formats and delivers a string message to the Sentry server.
+func (client *Client) CaptureMessage(message string, tags map[string]string, interfaces ...Interface) string {
+	return client.CaptureMessageWithExtra(message, tags, nil, interfaces...)
 }
 
 // CaptureMessage formats and delivers a string message to the Sentry server with the default *Client
@@ -583,8 +616,8 @@ func CaptureMessage(message string, tags map[string]string, interfaces ...Interf
 	return DefaultClient.CaptureMessage(message, tags, interfaces...)
 }
 
-// CaptureMessageAndWait is identical to CaptureMessage except it blocks and waits for the message to be sent.
-func (client *Client) CaptureMessageAndWait(message string, tags map[string]string, interfaces ...Interface) string {
+// CaptureMessageWithExtraAndWait is identical to CaptureMessageWithExtra except it blocks and waits for the message to be sent.
+func (client *Client) CaptureMessageWithExtraAndWait(message string, tags map[string]string, extra map[string]string, interfaces ...Interface) string {
 	if client == nil {
 		return ""
 	}
@@ -594,10 +627,20 @@ func (client *Client) CaptureMessageAndWait(message string, tags map[string]stri
 	}
 
 	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
-	eventID, ch := client.Capture(packet, tags)
+	eventID, ch := client.CaptureWithExtra(packet, tags, extra)
 	<-ch
 
 	return eventID
+}
+
+// CaptureMessageWithExtraAndWait is identical to CaptureMessageWithExtra except it blocks and waits for the message to be sent.
+func CaptureMessageWithExtraAndWait(message string, tags map[string]string, extra map[string]string, interfaces ...Interface) string {
+	return DefaultClient.CaptureMessageWithExtraAndWait(message, tags, extra, interfaces...)
+}
+
+// CaptureMessageAndWait is identical to CaptureMessage except it blocks and waits for the message to be sent.
+func (client *Client) CaptureMessageAndWait(message string, tags map[string]string, interfaces ...Interface) string {
+	return client.CaptureMessageWithExtraAndWait(message, tags, nil, interfaces...)
 }
 
 // CaptureMessageAndWait is identical to CaptureMessage except it blocks and waits for the message to be sent.
@@ -605,9 +648,10 @@ func CaptureMessageAndWait(message string, tags map[string]string, interfaces ..
 	return DefaultClient.CaptureMessageAndWait(message, tags, interfaces...)
 }
 
-// CaptureErrors formats and delivers an error to the Sentry server.
+// CaptureErrorWithExtra formats and delivers an error to the Sentry server.
 // Adds a stacktrace to the packet, excluding the call to this method.
-func (client *Client) CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
+// The difference between CaptureError and CaptureErrorWithExtra is that the later provides the option to specify Extra key-values to send to Sentry.
+func (client *Client) CaptureErrorWithExtra(err error, tags map[string]string, extra map[string]string, interfaces ...Interface) string {
 	if client == nil {
 		return ""
 	}
@@ -617,19 +661,32 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 	}
 
 	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
-	eventID, _ := client.Capture(packet, tags)
+	eventID, _ := client.CaptureWithExtra(packet, tags, extra)
 
 	return eventID
 }
 
-// CaptureErrors formats and delivers an error to the Sentry server using the default *Client.
+// CaptureErrorWithExtra formats and delivers an error to the Sentry server using the default *Client.
+// Adds a stacktrace to the packet, excluding the call to this method.
+// The difference between CaptureError and CaptureErrorWithExtra is that the later provides the option to specify Extra key-values to send to Sentry.
+func CaptureErrorWithExtra(err error, tags map[string]string, extra map[string]string, interfaces ...Interface) string {
+	return DefaultClient.CaptureErrorWithExtra(err, tags, extra, interfaces...)
+}
+
+// CaptureError formats and delivers an error to the Sentry server.
+// Adds a stacktrace to the packet, excluding the call to this method.
+func (client *Client) CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
+	return client.CaptureErrorWithExtra(err, tags, nil, interfaces...)
+}
+
+// CaptureError formats and delivers an error to the Sentry server using the default *Client.
 // Adds a stacktrace to the packet, excluding the call to this method.
 func CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
 	return DefaultClient.CaptureError(err, tags, interfaces...)
 }
 
-// CaptureErrorAndWait is identical to CaptureError, except it blocks and assures that the event was sent
-func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interface) string {
+// CaptureErrorWithExtraAndWait is identical to CaptureErrorWithExtra, except it blocks and assures that the event was sent
+func (client *Client) CaptureErrorWithExtraAndWait(err error, tags map[string]string, extra map[string]string, interfaces ...Interface) string {
 	if client == nil {
 		return ""
 	}
@@ -639,10 +696,20 @@ func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, int
 	}
 
 	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
-	eventID, ch := client.Capture(packet, tags)
+	eventID, ch := client.CaptureWithExtra(packet, tags, extra)
 	<-ch
 
 	return eventID
+}
+
+// CaptureErrorWithExtraAndWait is identical to CaptureErrorWithExtra, except it blocks and assures that the event was sent
+func CaptureErrorWithExtraAndWait(err error, tags map[string]string, extra map[string]string, interfaces ...Interface) string {
+	return DefaultClient.CaptureErrorWithExtraAndWait(err, tags, extra, interfaces...)
+}
+
+// CaptureErrorAndWait is identical to CaptureError, except it blocks and assures that the event was sent
+func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interface) string {
+	return client.CaptureErrorWithExtraAndWait(err, tags, nil, interfaces...)
 }
 
 // CaptureErrorAndWait is identical to CaptureError, except it blocks and assures that the event was sent
@@ -650,9 +717,10 @@ func CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interf
 	return DefaultClient.CaptureErrorAndWait(err, tags, interfaces...)
 }
 
-// CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
+// CapturePanicWithExtra calls f and then recovers and reports a panic to the Sentry server if it occurs.
 // If an error is captured, both the error and the reported Sentry error ID are returned.
-func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
+// The difference between CapturePanic and CapturePanicWithExtra is that the later provides the option to specify Extra key-values to send to Sentry.
+func (client *Client) CapturePanicWithExtra(f func(), tags map[string]string, extra map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
 	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
 	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
 	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
@@ -676,11 +744,24 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
 		}
 
-		errorID, _ = client.Capture(packet, tags)
+		errorID, _ = client.CaptureWithExtra(packet, tags, extra)
 	}()
 
 	f()
 	return
+}
+
+// CapturePanicWithExtra calls f and then recovers and reports a panic to the Sentry server if it occurs.
+// If an error is captured, both the error and the reported Sentry error ID are returned.
+// The difference between CapturePanic and CapturePanicWithExtra is that the later provides the option to specify Extra key-values to send to Sentry.
+func CapturePanicWithExtra(f func(), tags map[string]string, extra map[string]string, interfaces ...Interface) (interface{}, string) {
+	return DefaultClient.CapturePanicWithExtra(f, tags, extra, interfaces...)
+}
+
+// CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
+// If an error is captured, both the error and the reported Sentry error ID are returned.
+func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
+	return client.CapturePanicWithExtra(f, tags, nil, interfaces...)
 }
 
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
@@ -689,8 +770,8 @@ func CapturePanic(f func(), tags map[string]string, interfaces ...Interface) (in
 	return DefaultClient.CapturePanic(f, tags, interfaces...)
 }
 
-// CapturePanicAndWait is identical to CaptureError, except it blocks and assures that the event was sent
-func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
+// CapturePanicWithExtraAndWait is identical to CapturePanicWithExtra, except it blocks and assures that the event was sent
+func (client *Client) CapturePanicWithExtraAndWait(f func(), tags map[string]string, extra map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
 	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
 	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
 	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
@@ -715,7 +796,7 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 		}
 
 		var ch chan error
-		errorID, ch = client.Capture(packet, tags)
+		errorID, ch = client.CaptureWithExtra(packet, tags, extra)
 		<-ch
 	}()
 
@@ -723,7 +804,17 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 	return
 }
 
-// CapturePanicAndWait is identical to CaptureError, except it blocks and assures that the event was sent
+// CapturePanicWithExtraAndWait is identical to CapturePanicWithExtra, except it blocks and assures that the event was sent
+func CapturePanicWithExtraAndWait(f func(), tags map[string]string, extra map[string]string, interfaces ...Interface) (interface{}, string) {
+	return DefaultClient.CapturePanicWithExtraAndWait(f, tags, extra, interfaces...)
+}
+
+// CapturePanicAndWait is identical to CapturePanic, except it blocks and assures that the event was sent
+func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
+	return client.CapturePanicWithExtraAndWait(f, tags, nil, interfaces...)
+}
+
+// CapturePanicAndWait is identical to CapturePanic, except it blocks and assures that the event was sent
 func CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (interface{}, string) {
 	return DefaultClient.CapturePanicAndWait(f, tags, interfaces...)
 }
