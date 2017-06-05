@@ -120,7 +120,7 @@ func TestNewHttp(t *testing.T) {
 	}
 }
 
-var sanitizeQueryTests = []struct {
+var redactQueryTest = []struct {
 	input, output string
 }{
 	{"foo=bar", "foo=bar"},
@@ -128,22 +128,55 @@ var sanitizeQueryTests = []struct {
 	{"passphrase=foo", "passphrase=********"},
 	{"passwd=foo", "passwd=********"},
 	{"secret=foo", "secret=********"},
-	{"secretstuff=foo", "secretstuff=********"},
 	{"foo=bar&secret=foo", "foo=bar&secret=********"},
 	{"secret=foo&secret=bar", "secret=********"},
 }
 
-func parseQuery(q string) url.Values {
-	r, _ := url.ParseQuery(q)
-	return r
+func TestRedactQuery(t *testing.T) {
+	for _, test := range redactQueryTest {
+		r, _ := http.NewRequest("GET", "http://example.com/?"+test.input, nil)
+
+		actual := redactQuery(r)
+		expected_query, _ := url.ParseQuery(test.output)
+		expected := expected_query.Encode()
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("incorrect redaction: got %+v, want %+v", actual, expected)
+		}
+	}
 }
 
-func TestSanitizeQuery(t *testing.T) {
-	for _, test := range sanitizeQueryTests {
-		actual := sanitizeQuery(parseQuery(test.input))
-		expected := parseQuery(test.output)
+var redactHeaderTest = []struct {
+	header, input, output string
+}{
+	{"Authorization", "secret", "********"},
+	{"Connection", "close", "close"},
+}
+
+func TestRedactHeaders(t *testing.T) {
+	for _, test := range redactHeaderTest {
+		r, _ := http.NewRequest("GET", "http://example.com", nil)
+		r.Header.Set(test.header, test.input)
+
+		headers := redactHeaders(r)
+		actual := headers[test.header]
+		expected := test.output
+
 		if !reflect.DeepEqual(actual, expected) {
-			t.Errorf("incorrect sanitization: got %+v, want %+v", actual, expected)
+			t.Errorf("incorrect redaction: got %+v, want %+v", actual, expected)
 		}
+	}
+}
+
+func TestRedactHeadersMulti(t *testing.T) {
+	HeaderSecretFields = append(HeaderSecretFields, "X-Multi")
+	r, _ := http.NewRequest("GET", "http://example.com", nil)
+	r.Header["X-Multi"] = []string{"m0", "m1", "m2"}
+
+	headers := redactHeaders(r)
+	actual := headers["X-Multi"]
+	expected := "********,********,********"
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Errorf("incorrect redaction: got %+v, want %+v", actual, expected)
 	}
 }
