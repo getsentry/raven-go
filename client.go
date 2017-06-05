@@ -268,9 +268,9 @@ type context struct {
 	tags map[string]string
 }
 
-func (c *context) SetUser(u *User) { c.user = u }
-func (c *context) SetHttp(h *Http) { c.http = h }
-func (c *context) SetTags(t map[string]string) {
+func (c *context) setUser(u *User) { c.user = u }
+func (c *context) setHttp(h *Http) { c.http = h }
+func (c *context) setTags(t map[string]string) {
 	if c.tags == nil {
 		c.tags = make(map[string]string)
 	}
@@ -278,7 +278,7 @@ func (c *context) SetTags(t map[string]string) {
 		c.tags[k] = v
 	}
 }
-func (c *context) Clear() {
+func (c *context) clear() {
 	c.user = nil
 	c.http = nil
 	c.tags = nil
@@ -515,10 +515,10 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	// Merge capture tags and client tags
 	packet.AddTags(captureTags)
 	packet.AddTags(client.Tags)
-	packet.AddTags(client.context.tags)
 
 	// Initialize any required packet fields
 	client.mu.RLock()
+	packet.AddTags(client.context.tags)
 	projectID := client.projectID
 	release := client.release
 	environment := client.environment
@@ -788,10 +788,29 @@ func (client *Client) SetIncludePaths(p []string) {
 	client.includePaths = p
 }
 
-func (c *Client) SetUserContext(u *User)             { c.context.SetUser(u) }
-func (c *Client) SetHttpContext(h *Http)             { c.context.SetHttp(h) }
-func (c *Client) SetTagsContext(t map[string]string) { c.context.SetTags(t) }
-func (c *Client) ClearContext()                      { c.context.Clear() }
+func (c *Client) SetUserContext(u *User) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.setUser(u)
+}
+
+func (c *Client) SetHttpContext(h *Http) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.setHttp(h)
+}
+
+func (c *Client) SetTagsContext(t map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.setTags(t)
+}
+
+func (c *Client) ClearContext() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.clear()
+}
 
 func SetUserContext(u *User)             { DefaultClient.SetUserContext(u) }
 func SetHttpContext(h *Http)             { DefaultClient.SetHttpContext(h) }
