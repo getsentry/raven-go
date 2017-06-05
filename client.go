@@ -336,13 +336,17 @@ func newClient(tags map[string]string) *Client {
 	return client
 }
 
-// New constructs a new Sentry client instance
+// New constructs a new Sentry client instance.
+//
+// Caller must call Close to clean up client after use.
 func New(dsn string) (*Client, error) {
 	client := newClient(nil)
 	return client, client.SetDSN(dsn)
 }
 
 // NewWithTags constructs a new Sentry client instance with default tags.
+//
+// Caller must call Close to clean up client after use.
 func NewWithTags(dsn string, tags map[string]string) (*Client, error) {
 	client := newClient(tags)
 	return client, client.SetDSN(dsn)
@@ -352,6 +356,8 @@ func NewWithTags(dsn string, tags map[string]string) (*Client, error) {
 // handle packets sent by Client.Report.
 //
 // Deprecated: use New and NewWithTags instead
+//
+// Caller must call Close to clean up client after use.
 func NewClient(dsn string, tags map[string]string) (*Client, error) {
 	client := newClient(tags)
 	return client, client.SetDSN(dsn)
