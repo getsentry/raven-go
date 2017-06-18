@@ -157,7 +157,7 @@ func functionName(pc uintptr, filePath string) (pack string, name string) {
 //
 // If the extraction fails, pack = "", name = funcName.
 func extractFunctionName(filePath, funcName string) (pack, name string) {
-	if f, err := url.PathUnescape(funcName); err != nil {
+	if f, err := url.QueryUnescape(funcName); err != nil {
 		return "", funcName
 	} else {
 		funcName = f
