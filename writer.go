@@ -14,7 +14,7 @@ func (w *Writer) Write(p []byte) (int, error) {
 	packet := NewPacket(message, &Message{message, nil})
 	packet.Level = w.Level
 	packet.Logger = w.Logger
-	w.Client.Capture(packet, nil)
+	w.Client.Capture(packet, nil, nil)
 
 	return len(p), nil
 }

@@ -19,7 +19,7 @@ func Example() {
 	}
 	trace := NewStacktrace(0, 2, nil)
 	packet := NewPacket(raisedErr.Error(), NewException(raisedErr, trace), NewHttp(r))
-	eventID, ch := client.Capture(packet, nil)
+	eventID, ch := client.Capture(packet, nil, nil)
 	if err = <-ch; err != nil {
 		log.Fatal(err)
 	}

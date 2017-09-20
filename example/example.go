@@ -22,7 +22,7 @@ func main() {
 	httpReq.RemoteAddr = "127.0.0.1:80"
 	httpReq.Header = http.Header{"Content-Type": {"text/html"}, "Content-Length": {"42"}}
 	packet := &raven.Packet{Message: "Test report", Interfaces: []raven.Interface{raven.NewException(errors.New("example"), trace()), raven.NewHttp(httpReq)}}
-	_, ch := client.Capture(packet, nil)
+	_, ch := client.Capture(packet, nil, nil)
 	if err = <-ch; err != nil {
 		log.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func CheckError(err error, r *http.Request) {
 		log.Fatal(err)
 	}
 	packet := raven.NewPacket(err.Error(), raven.NewException(err, trace()), raven.NewHttp(r))
-	eventID, _ := client.Capture(packet, nil)
+	eventID, _ := client.Capture(packet, nil, nil)
 	message := fmt.Sprintf("Error event with id \"%s\" - %s", eventID, err.Error())
 	log.Println(message)
 }
