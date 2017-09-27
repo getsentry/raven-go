@@ -6,6 +6,7 @@ import (
 	"compress/zlib"
 	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -317,12 +318,29 @@ func newTransport() Transport {
 	} else {
 		t.Client = &http.Client{
 			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
+				Proxy:           http.ProxyFromEnvironment,
 				TLSClientConfig: &tls.Config{RootCAs: rootCAs},
 			},
 		}
 	}
 	return t
+}
+
+// SetRootCAs sets the root CAs for the default *Client instance
+func SetRootCAs(CAs *x509.CertPool) {
+	DefaultClient.SetRootCAs(CAs)
+}
+
+// SetRootCAs sets the root CAs for this client instance
+func (client *Client) SetRootCAs(CAs *x509.CertPool) {
+	t := &HTTPTransport{}
+	t.Client = &http.Client{
+		Transport: &http.Transport{
+			Proxy:           http.ProxyFromEnvironment,
+			TLSClientConfig: &tls.Config{RootCAs: CAs},
+		},
+	}
+	client.Transport = t
 }
 
 func newClient(tags map[string]string) *Client {
