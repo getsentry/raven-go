@@ -538,7 +538,7 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 		return
 	}
 
-	if mrand.Float32() > client.sampleRate {
+	if client.sampleRate < 1.0 && mrand.Float32() > client.sampleRate {
 		return
 	}
 
