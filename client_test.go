@@ -146,6 +146,35 @@ func TestSetDSN(t *testing.T) {
 	}
 }
 
+func TestNewClient(t *testing.T) {
+	client := newClient(nil)
+	if client.sampleRate != 1.0 {
+		t.Error("invalid default sample rate")
+	}
+}
+
+func TestSetSampleRate(t *testing.T) {
+	client := &Client{}
+	err := client.SetSampleRate(0.2)
+
+	if err != nil {
+		t.Error("invalid sample rate")
+	}
+
+	if client.sampleRate != 0.2 {
+		t.Error("incorrect sample rate: ", client.sampleRate)
+	}
+}
+
+func TestSetSampleRateInvalid(t *testing.T) {
+	client := &Client{}
+	err := client.SetSampleRate(-1.0)
+
+	if err != ErrInvalidSampleRate {
+		t.Error("invalid sample rate should return ErrInvalidSampleRate")
+	}
+}
+
 func TestUnmarshalTag(t *testing.T) {
 	actual := new(Tag)
 	if err := json.Unmarshal([]byte(`["foo","bar"]`), actual); err != nil {

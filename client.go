@@ -14,6 +14,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	mrand "math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -37,6 +38,7 @@ var (
 	ErrMissingUser           = errors.New("raven: dsn missing public key and/or password")
 	ErrMissingPrivateKey     = errors.New("raven: dsn missing private key")
 	ErrMissingProjectID      = errors.New("raven: dsn missing project id")
+	ErrInvalidSampleRate     = errors.New("raven: sample rate should be between 0 and 1")
 )
 
 type Severity string
@@ -317,7 +319,7 @@ func newTransport() Transport {
 	} else {
 		t.Client = &http.Client{
 			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
+				Proxy:           http.ProxyFromEnvironment,
 				TLSClientConfig: &tls.Config{RootCAs: rootCAs},
 			},
 		}
@@ -327,10 +329,11 @@ func newTransport() Transport {
 
 func newClient(tags map[string]string) *Client {
 	client := &Client{
-		Transport: newTransport(),
-		Tags:      tags,
-		context:   &context{},
-		queue:     make(chan *outgoingPacket, MaxQueueBuffer),
+		Transport:  newTransport(),
+		Tags:       tags,
+		context:    &context{},
+		sampleRate: 1.0,
+		queue:      make(chan *outgoingPacket, MaxQueueBuffer),
 	}
 	client.SetDSN(os.Getenv("SENTRY_DSN"))
 	return client
@@ -377,6 +380,7 @@ type Client struct {
 	authHeader  string
 	release     string
 	environment string
+	sampleRate  float32
 
 	// default logger name (leave empty for 'root')
 	defaultLoggerName string
@@ -484,6 +488,18 @@ func (client *Client) SetDefaultLoggerName(name string) {
 	client.defaultLoggerName = name
 }
 
+// SetSampleRate sets how much sampling we want on client side
+func (client *Client) SetSampleRate(rate float32) error {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
+	if rate < 0 || rate > 1 {
+		return ErrInvalidSampleRate
+	}
+	client.sampleRate = rate
+	return nil
+}
+
 // SetRelease sets the "release" tag on the default *Client
 func SetRelease(release string) { DefaultClient.SetRelease(release) }
 
@@ -494,6 +510,9 @@ func SetEnvironment(environment string) { DefaultClient.SetEnvironment(environme
 func SetDefaultLoggerName(name string) {
 	DefaultClient.SetDefaultLoggerName(name)
 }
+
+// SetSampleRate sets the "sample rate" on the degault *Client
+func SetSampleRate(rate float32) error { return DefaultClient.SetSampleRate(rate) }
 
 func (client *Client) worker() {
 	for outgoingPacket := range client.queue {
@@ -516,6 +535,10 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	if client == nil {
 		// return a chan that always returns nil when the caller receives from it
 		close(ch)
+		return
+	}
+
+	if mrand.Float32() > client.sampleRate {
 		return
 	}
 
