@@ -641,7 +641,9 @@ func (client *Client) CaptureMessageAndWait(message string, tags map[string]stri
 
 	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
 	eventID, ch := client.Capture(packet, tags)
-	<-ch
+	if eventID != "" {
+		<-ch
+	}
 
 	return eventID
 }
@@ -686,7 +688,9 @@ func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, int
 
 	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
 	eventID, ch := client.Capture(packet, tags)
-	<-ch
+	if eventID != "" {
+		<-ch
+	}
 
 	return eventID
 }
@@ -762,7 +766,9 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 
 		var ch chan error
 		errorID, ch = client.Capture(packet, tags)
-		<-ch
+		if errorID != "" {
+			<-ch
+		}
 	}()
 
 	f()
