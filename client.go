@@ -639,7 +639,7 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 		return ""
 	}
 
-	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1, 3, client.includePaths)))...)
+	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, GetOrNewStacktrace(err, 1, 3, client.includePaths)))...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
