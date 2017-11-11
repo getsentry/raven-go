@@ -38,6 +38,7 @@ var (
 	ErrMissingUser           = errors.New("raven: dsn missing public key and/or password")
 	ErrMissingPrivateKey     = errors.New("raven: dsn missing private key")
 	ErrMissingProjectID      = errors.New("raven: dsn missing project id")
+	ErrClientNotConfigured   = errors.New("raven: client not configured")
 )
 
 type Severity string
@@ -608,24 +609,24 @@ func CaptureMessage(message string, tags map[string]string, interfaces ...Interf
 }
 
 // CaptureMessageAndWait is identical to CaptureMessage except it blocks and waits for the message to be sent.
-func (client *Client) CaptureMessageAndWait(message string, tags map[string]string, interfaces ...Interface) string {
+func (client *Client) CaptureMessageAndWait(message string, tags map[string]string, interfaces ...Interface) (error, string) {
 	if client == nil {
-		return ""
+		return ErrClientNotConfigured, ""
 	}
 
 	if client.shouldExcludeErr(message) {
-		return ""
+		return nil, ""
 	}
 
 	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
 	eventID, ch := client.Capture(packet, tags)
-	<-ch
+	internalError := <-ch
 
-	return eventID
+	return internalError, eventID
 }
 
 // CaptureMessageAndWait is identical to CaptureMessage except it blocks and waits for the message to be sent.
-func CaptureMessageAndWait(message string, tags map[string]string, interfaces ...Interface) string {
+func CaptureMessageAndWait(message string, tags map[string]string, interfaces ...Interface) (error, string) {
 	return DefaultClient.CaptureMessageAndWait(message, tags, interfaces...)
 }
 
@@ -655,26 +656,26 @@ func CaptureError(err error, tags map[string]string, interfaces ...Interface) st
 }
 
 // CaptureErrorAndWait is identical to CaptureError, except it blocks and assures that the event was sent
-func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interface) string {
+func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interface) (error, string) {
 	if client == nil {
-		return ""
+		return ErrClientNotConfigured, ""
 	}
 
 	if client.shouldExcludeErr(err.Error()) {
-		return ""
+		return nil, ""
 	}
 
 	cause := pkgErrors.Cause(err)
 
 	packet := NewPacket(cause.Error(), append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1, 3, client.includePaths)))...)
 	eventID, ch := client.Capture(packet, tags)
-	<-ch
+	internalError := <-ch
 
-	return eventID
+	return internalError, eventID
 }
 
 // CaptureErrorAndWait is identical to CaptureError, except it blocks and assures that the event was sent
-func CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interface) string {
+func CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interface) (error, string) {
 	return DefaultClient.CaptureErrorAndWait(err, tags, interfaces...)
 }
 
@@ -718,7 +719,7 @@ func CapturePanic(f func(), tags map[string]string, interfaces ...Interface) (in
 }
 
 // CapturePanicAndWait is identical to CaptureError, except it blocks and assures that the event was sent
-func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
+func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (internalError error, err interface{}, errorID string) {
 	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
 	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
 	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
@@ -744,7 +745,7 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 
 		var ch chan error
 		errorID, ch = client.Capture(packet, tags)
-		<-ch
+		internalError = <-ch
 	}()
 
 	f()
@@ -752,7 +753,7 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 }
 
 // CapturePanicAndWait is identical to CaptureError, except it blocks and assures that the event was sent
-func CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (interface{}, string) {
+func CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (error, interface{}, string) {
 	return DefaultClient.CapturePanicAndWait(f, tags, interfaces...)
 }
 
