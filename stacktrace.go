@@ -17,14 +17,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-// https://docs.getsentry.com/hosted/clientdev/interfaces/#failure-interfaces
+// Stacktrace https://docs.getsentry.com/hosted/clientdev/interfaces/#failure-interfaces
 type Stacktrace struct {
 	// Required
 	Frames []*StacktraceFrame `json:"frames"`
 }
 
+// Class ...
 func (s *Stacktrace) Class() string { return "stacktrace" }
 
+// Culprit ...
 func (s *Stacktrace) Culprit() string {
 	for i := len(s.Frames) - 1; i >= 0; i-- {
 		frame := s.Frames[i]
@@ -35,6 +37,7 @@ func (s *Stacktrace) Culprit() string {
 	return ""
 }
 
+// StacktraceFrame ...
 type StacktraceFrame struct {
 	// At least one required
 	Filename string `json:"filename,omitempty"`
@@ -51,7 +54,7 @@ type StacktraceFrame struct {
 	InApp        bool     `json:"in_app"`
 }
 
-// Try to get stacktrace from err as an interface of github.com/pkg/errors, or else NewStacktrace()
+// GetOrNewStacktrace Tries to get stacktrace from err as an interface of github.com/pkg/errors, or else NewStacktrace()
 func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []string) *Stacktrace {
 	stacktracer, errHasStacktrace := err.(interface {
 		StackTrace() errors.StackTrace
@@ -74,13 +77,12 @@ func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []s
 			}
 		}
 		return &Stacktrace{Frames: frames}
-	} else {
-		return NewStacktrace(skip + 1, context, appPackagePrefixes)
 	}
+	return NewStacktrace(skip+1, context, appPackagePrefixes)
+
 }
 
-
-// Intialize and populate a new stacktrace, skipping skip frames.
+// NewStacktrace ... Intialize and populate a new stacktrace, skipping skip frames.
 //
 // context is the number of surrounding lines that should be included for context.
 // Setting context to 3 would try to get seven lines. Setting context to -1 returns
@@ -115,7 +117,7 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 	return &Stacktrace{frames}
 }
 
-// Build a single frame using data returned from runtime.Caller.
+// NewStacktraceFrame  ... Build a single frame using data returned from runtime.Caller.
 //
 // context is the number of surrounding lines that should be included for context.
 // Setting context to 3 would try to get seven lines. Setting context to -1 returns
