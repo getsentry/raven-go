@@ -86,12 +86,6 @@ type Transport interface {
 
 type Extra map[string]interface{}
 
-type ErrWithExtra interface {
-	Error() string
-	Source() error
-	ExtraInfo() Extra
-}
-
 type outgoingPacket struct {
 	packet *Packet
 	ch     chan error
@@ -704,16 +698,10 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 		return ""
 	}
 
-	var packet *Packet
+	extra := extractExtra(err)
 	cause := pkgErrors.Cause(err)
-	interfaces = append(interfaces, client.context.interfaces()...)
 
-	if errWithExtra, ok := cause.(ErrWithExtra); ok {
-		packet = NewPacketWithExtra(errWithExtra.Error(), errWithExtra.ExtraInfo(), append(interfaces, NewException(errWithExtra.Source(), GetOrNewStacktrace(err, 1, 3, client.includePaths)))...)
-	} else {
-		packet = NewPacket(cause.Error(), append(interfaces, NewException(cause, GetOrNewStacktrace(err, 1, 3, client.includePaths)))...)
-	}
-
+	packet := NewPacketWithExtra(cause.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(err, 1, 3, client.includePaths)))...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -735,16 +723,10 @@ func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, int
 		return ""
 	}
 
-	var packet *Packet
+	extra := extractExtra(err)
 	cause := pkgErrors.Cause(err)
-	interfaces = append(interfaces, client.context.interfaces()...)
 
-	if errWithExtra, ok := cause.(ErrWithExtra); ok {
-		packet = NewPacketWithExtra(errWithExtra.Error(), errWithExtra.ExtraInfo(), append(interfaces, NewException(errWithExtra.Source(), GetOrNewStacktrace(err, 1, 3, client.includePaths)))...)
-	} else {
-		packet = NewPacket(cause.Error(), append(interfaces, NewException(cause, GetOrNewStacktrace(err, 1, 3, client.includePaths)))...)
-	}
-
+	packet := NewPacketWithExtra(cause.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(err, 1, 3, client.includePaths)))...)
 	eventID, ch := client.Capture(packet, tags)
 	if eventID != "" {
 		<-ch
