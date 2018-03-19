@@ -337,6 +337,8 @@ func newClient(tags map[string]string) *Client {
 		queue:      make(chan *outgoingPacket, MaxQueueBuffer),
 	}
 	client.SetDSN(os.Getenv("SENTRY_DSN"))
+	client.SetRelease(os.Getenv("SENTRY_RELEASE"))
+	client.SetEnvironment(os.Getenv("SENTRY_ENVIRONMENT"))
 	return client
 }
 
