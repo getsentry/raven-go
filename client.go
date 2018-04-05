@@ -37,7 +37,6 @@ var (
 	ErrPacketDropped         = errors.New("raven: packet dropped")
 	ErrUnableToUnmarshalJSON = errors.New("raven: unable to unmarshal JSON")
 	ErrMissingUser           = errors.New("raven: dsn missing public key and/or password")
-	ErrMissingPrivateKey     = errors.New("raven: dsn missing private key")
 	ErrMissingProjectID      = errors.New("raven: dsn missing project id")
 	ErrInvalidSampleRate     = errors.New("raven: sample rate should be between 0 and 1")
 )
@@ -446,10 +445,7 @@ func (client *Client) SetDSN(dsn string) error {
 		return ErrMissingUser
 	}
 	publicKey := uri.User.Username()
-	secretKey, ok := uri.User.Password()
-	if !ok {
-		return ErrMissingPrivateKey
-	}
+	secretKey := uri.User.Password()
 	uri.User = nil
 
 	if idx := strings.LastIndex(uri.Path, "/"); idx != -1 {
@@ -462,7 +458,11 @@ func (client *Client) SetDSN(dsn string) error {
 
 	client.url = uri.String()
 
-	client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
+	if secretKey != nil {
+		client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
+	} else {
+		client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s", publicKey, secretKey)
+	}
 
 	return nil
 }
