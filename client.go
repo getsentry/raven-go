@@ -445,7 +445,7 @@ func (client *Client) SetDSN(dsn string) error {
 		return ErrMissingUser
 	}
 	publicKey := uri.User.Username()
-	secretKey := uri.User.Password()
+	secretKey, hasSecretKey := uri.User.Password()
 	uri.User = nil
 
 	if idx := strings.LastIndex(uri.Path, "/"); idx != -1 {
@@ -458,7 +458,7 @@ func (client *Client) SetDSN(dsn string) error {
 
 	client.url = uri.String()
 
-	if secretKey != nil {
+	if hasSecretKey {
 		client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
 	} else {
 		client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s", publicKey, secretKey)
