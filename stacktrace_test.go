@@ -26,7 +26,8 @@ var (
 func TestFunctionName(t *testing.T) {
 	for _, test := range functionNameTests {
 		pc, _, _, _ := runtime.Caller(test.skip)
-		pack, name := functionName(pc)
+		fName := runtime.FuncForPC(pc).Name()
+		pack, name := functionName(fName)
 
 		if pack != test.pack {
 			t.Errorf("incorrect package; got %s, want %s", pack, test.pack)
@@ -122,7 +123,6 @@ func init() {
 		{0, thisPackage, "TestFunctionName"},
 		{1, "testing", "tRunner"},
 		{2, "runtime", "goexit"},
-		{100, "", ""},
 	}
 }
 
