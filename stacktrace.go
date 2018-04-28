@@ -94,7 +94,7 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 	var frames []*StacktraceFrame
 
 	callerPcs := make([]uintptr, 100)
-	numCallers := runtime.Callers(skip, callerPcs)
+	numCallers := runtime.Callers(skip+2, callerPcs)
 
 	// If there are no callers, the entire stacktrace is nil
 	if numCallers == 0 {
