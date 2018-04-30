@@ -461,7 +461,7 @@ func (client *Client) SetDSN(dsn string) error {
 	if hasSecretKey {
 		client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
 	} else {
-		client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s", publicKey, secretKey)
+		client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s", publicKey)
 	}
 
 	return nil
