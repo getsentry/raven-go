@@ -68,6 +68,11 @@ func (timestamp *Timestamp) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (timestamp Timestamp) Format(format string) string {
+	t := time.Time(timestamp)
+	return t.Format(format)
+}
+
 // An Interface is a Sentry interface that will be serialized as JSON.
 // It must implement json.Marshaler or use json struct tags.
 type Interface interface {
