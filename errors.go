@@ -1,13 +1,7 @@
 package raven
 
-import pkgErrors "github.com/pkg/errors"
-
 type causer interface {
 	Cause() error
-}
-
-type stacktracer interface {
-	StackTrace() pkgErrors.StackTrace
 }
 
 type errWrappedWithExtra struct {
@@ -27,6 +21,7 @@ func (ewx *errWrappedWithExtra) ExtraInfo() Extra {
 	return ewx.extraInfo
 }
 
+// Adds extra data to an error before reporting to Sentry
 func WrapWithExtra(err error, extraInfo map[string]interface{}) error {
 	return &errWrappedWithExtra{
 		err:       err,
@@ -40,6 +35,9 @@ type ErrWithExtra interface {
 	ExtraInfo() Extra
 }
 
+// Iteratively fetches all the Extra data added to an error,
+// and it's underlying errors. Extra data defined first is
+// respected, and is not overridden when extracting.
 func extractExtra(err error) Extra {
 	extra := Extra{}
 

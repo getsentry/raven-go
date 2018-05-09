@@ -276,3 +276,44 @@ func TestCaptureNilError(t *testing.T) {
 		t.Error("expected empty eventID:", eventID)
 	}
 }
+
+func TestNewPacketWithExtraSetsDefault(t *testing.T) {
+	testCases := []struct {
+		Extra    Extra
+		Expected Extra
+	}{
+		// Defaults should be set when nil is passed
+		{
+			Extra:    nil,
+			Expected: setExtraDefaults(Extra{}),
+		},
+		// Defaults should be set when empty is passed
+		{
+			Extra:    Extra{},
+			Expected: setExtraDefaults(Extra{}),
+		},
+		// Packet should always override default keys
+		{
+			Extra: Extra{
+				"runtime.Version": "notagoversion",
+			},
+			Expected: setExtraDefaults(Extra{}),
+		},
+		// Packet should include our extra info
+		{
+			Extra: Extra{
+				"extra.extra": "extra",
+			},
+			Expected: setExtraDefaults(Extra{
+				"extra.extra": "extra",
+			}),
+		},
+	}
+
+	for i, test := range testCases {
+		packet := NewPacketWithExtra("packet", test.Extra)
+		if !reflect.DeepEqual(packet.Extra, test.Expected) {
+			t.Errorf("Case [%d]: Expected packet: %+v, got: %+v", i, test.Expected, packet.Extra)
+		}
+	}
+}

@@ -194,11 +194,12 @@ func NewPacketWithExtra(message string, extra Extra, interfaces ...Interface) *P
 	}
 }
 
-func setExtraDefaults(extra Extra) {
+func setExtraDefaults(extra Extra) Extra {
 	extra["runtime.Version"] = runtime.Version()
 	extra["runtime.NumCPU"] = runtime.NumCPU()
 	extra["runtime.GOMAXPROCS"] = runtime.GOMAXPROCS(0) // 0 just returns the current value
 	extra["runtime.NumGoroutine"] = runtime.NumGoroutine()
+	return extra
 }
 
 // Init initializes required fields in a packet. It is typically called by
