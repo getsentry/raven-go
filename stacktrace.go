@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pkg/errors"
+	pkgErrors "github.com/pkg/errors"
 )
 
 // https://docs.getsentry.com/hosted/clientdev/interfaces/#failure-interfaces
@@ -51,14 +51,17 @@ type StacktraceFrame struct {
 	InApp        bool     `json:"in_app"`
 }
 
-// Try to get stacktrace from err as an interface of github.com/pkg/errors, or else NewStacktrace()
+// GetOrNewStacktrace tries to get the stack trace from err as an interface of
+// github.com/pkg/errors, or else NewStacktrace().
 func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []string) *Stacktrace {
-	stacktracer, errHasStacktrace := err.(interface {
-		StackTrace() errors.StackTrace
-	})
-	if errHasStacktrace {
+	type stacktracer interface {
+		StackTrace() pkgErrors.StackTrace
+	}
+
+	cause := causeWithStacktrace(err)
+	if withStacktrace, ok := cause.(stacktracer); ok {
 		var frames []*StacktraceFrame
-		for _, f := range stacktracer.StackTrace() {
+		for _, f := range withStacktrace.StackTrace() {
 			pc := uintptr(f) - 1
 			fn := runtime.FuncForPC(pc)
 			var file string
@@ -74,11 +77,47 @@ func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []s
 			}
 		}
 		return &Stacktrace{Frames: frames}
-	} else {
-		return NewStacktrace(skip + 1, context, appPackagePrefixes)
 	}
+	return NewStacktrace(skip+1, context, appPackagePrefixes)
 }
 
+// causeWithStacktrace unwraps github.com/pkg/errors package's error to
+// find the innermost cause of the error that also has a stack trace. Returns
+// nil if the err is nil or if there are no layers with a stack trace. This
+// differs slightly from errors.Cause(err), as Cause simply returns the
+// innermost error regardless of whether it has a stack trace or not, which
+// in turn depends on whether the errors package created the original error
+// (e.g. using errors.New or errors.Errof) or if the errors package wrapped
+// it (e.g. using errors.Wrap or errors.WithStack).
+//
+// For the purposes of reporting where some error originated from, we want to
+// show the stack trace, in order of preference: at the point where the error
+// was created (if it was created by the errors package), or where it was first
+// wrapped (if it was wrapped by the errors package), or where the call to
+// raven.CaptureError is. This ordering presents the most information about
+// the error's context to the viewer of the report.
+func causeWithStacktrace(err error) error {
+	type causer interface {
+		Cause() error
+	}
+	type stacktracer interface {
+		StackTrace() pkgErrors.StackTrace
+	}
+
+	var withStacktrace error
+	for err != nil {
+		if _, ok := err.(stacktracer); ok {
+			withStacktrace = err
+		}
+
+		withCause, ok := err.(causer)
+		if !ok {
+			break
+		}
+		err = withCause.Cause()
+	}
+	return withStacktrace
+}
 
 // Intialize and populate a new stacktrace, skipping skip frames.
 //

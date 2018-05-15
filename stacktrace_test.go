@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	pkgErrors "github.com/pkg/errors"
 )
 
 type FunctionNameTest struct {
@@ -59,7 +61,7 @@ func TestStacktrace(t *testing.T) {
 	if f.Module != thisPackage {
 		t.Error("incorrect Module:", f.Module)
 	}
-	if f.Lineno != 87 {
+	if f.Lineno != 89 {
 		t.Error("incorrect Lineno:", f.Lineno)
 	}
 	if f.ContextLine != "\treturn NewStacktrace(0, 2, []string{thisPackage})" {
@@ -183,6 +185,41 @@ func TestFileContext(t *testing.T) {
 		}
 		if len(fileCache) != i+1 {
 			t.Errorf("%d: result was not cached; len(fileCached)=%d", i, len(fileCache))
+		}
+	}
+}
+
+func TestCauseWithStacktrace(t *testing.T) {
+	baseErr := fmt.Errorf("base error")
+	baseWrapped1 := pkgErrors.Wrap(baseErr, "base wrapped once")
+	baseWrapped2 := pkgErrors.Wrap(baseWrapped1, "base wrapped twice")
+	baseWrapped3 := pkgErrors.Wrap(baseWrapped2, "base wrapped thrice")
+
+	pkgErr := pkgErrors.New("pkg/errors error")
+	pkgWrapped1 := pkgErrors.Wrap(pkgErr, "pkg wrapped once")
+	pkgWrapped2 := pkgErrors.Wrap(pkgWrapped1, "pkg wrapped twice")
+	pkgWrapped3 := pkgErrors.Wrap(pkgWrapped2, "pkg wrapped thrice")
+
+	testCases := []struct {
+		name          string
+		inputErr      error
+		expectedCause error
+	}{
+		{"nil error has no stack trace", nil, nil},
+		{"base error has no stack trace", baseErr, nil},
+		{"base error wrapped once", baseWrapped1, baseWrapped1},
+		{"base error wrapped twice", baseWrapped2, baseWrapped1},
+		{"base error wrapped thrice", baseWrapped3, baseWrapped1},
+		{"pkg error", pkgErr, pkgErr},
+		{"pkg error wrapped once", pkgWrapped1, pkgErr},
+		{"pkg error wrapped twice", pkgWrapped2, pkgErr},
+		{"pkg error wrapped thrice", pkgWrapped3, pkgErr},
+	}
+
+	for _, tc := range testCases {
+		cause := causeWithStacktrace(tc.inputErr)
+		if cause != tc.expectedCause {
+			t.Errorf("for %s: expected %v; got %v", tc.name, tc.expectedCause, cause)
 		}
 	}
 }

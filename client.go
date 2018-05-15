@@ -403,23 +403,23 @@ type Client struct {
 // Initialize a default *Client instance
 var DefaultClient = newClient(nil)
 
-func (c *Client) SetIgnoreErrors(errs []string) error {
+func (client *Client) SetIgnoreErrors(errs []string) error {
 	joinedRegexp := strings.Join(errs, "|")
 	r, err := regexp.Compile(joinedRegexp)
 	if err != nil {
 		return fmt.Errorf("failed to compile regexp %q for %q: %v", joinedRegexp, errs, err)
 	}
 
-	c.mu.Lock()
-	c.ignoreErrorsRegexp = r
-	c.mu.Unlock()
+	client.mu.Lock()
+	client.ignoreErrorsRegexp = r
+	client.mu.Unlock()
 	return nil
 }
 
-func (c *Client) shouldExcludeErr(errStr string) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.ignoreErrorsRegexp != nil && c.ignoreErrorsRegexp.MatchString(errStr)
+func (client *Client) shouldExcludeErr(errStr string) bool {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+	return client.ignoreErrorsRegexp != nil && client.ignoreErrorsRegexp.MatchString(errStr)
 }
 
 func SetIgnoreErrors(errs ...string) error {
@@ -666,7 +666,7 @@ func CaptureMessageAndWait(message string, tags map[string]string, interfaces ..
 	return DefaultClient.CaptureMessageAndWait(message, tags, interfaces...)
 }
 
-// CaptureErrors formats and delivers an error to the Sentry server.
+// CaptureError formats and delivers an error to the Sentry server.
 // Adds a stacktrace to the packet, excluding the call to this method.
 func (client *Client) CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
 	if client == nil {
@@ -683,13 +683,13 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 
 	cause := pkgErrors.Cause(err)
 
-	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1, 3, client.includePaths)))...)
+	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(err, 1, 3, client.includePaths)))...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
 }
 
-// CaptureErrors formats and delivers an error to the Sentry server using the default *Client.
+// CaptureError formats and delivers an error to the Sentry server using the default *Client.
 // Adds a stacktrace to the packet, excluding the call to this method.
 func CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
 	return DefaultClient.CaptureError(err, tags, interfaces...)
@@ -707,7 +707,7 @@ func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, int
 
 	cause := pkgErrors.Cause(err)
 
-	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1, 3, client.includePaths)))...)
+	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(err, 1, 3, client.includePaths)))...)
 	eventID, ch := client.Capture(packet, tags)
 	if eventID != "" {
 		<-ch
