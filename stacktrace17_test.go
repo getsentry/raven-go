@@ -1,4 +1,4 @@
-// +build !go1.7
+// +build go1.7
 
 package raven
 
@@ -28,7 +28,8 @@ var (
 func TestFunctionName(t *testing.T) {
 	for _, test := range functionNameTests {
 		pc, _, _, _ := runtime.Caller(test.skip)
-		pack, name := functionName(pc)
+		fName := runtime.FuncForPC(pc).Name()
+		pack, name := functionName(fName)
 
 		if pack != test.pack {
 			t.Errorf("incorrect package; got %s, want %s", pack, test.pack)
@@ -61,7 +62,7 @@ func TestStacktrace(t *testing.T) {
 	if f.Module != thisPackage {
 		t.Error("incorrect Module:", f.Module)
 	}
-	if f.Lineno != 89 {
+	if f.Lineno != 90 {
 		t.Error("incorrect Lineno:", f.Lineno)
 	}
 	if f.ContextLine != "\treturn NewStacktrace(0, 2, []string{thisPackage})" {
@@ -124,7 +125,6 @@ func init() {
 		{0, thisPackage, "TestFunctionName"},
 		{1, "testing", "tRunner"},
 		{2, "runtime", "goexit"},
-		{100, "", ""},
 	}
 }
 
