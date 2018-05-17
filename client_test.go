@@ -118,7 +118,7 @@ func TestPacketInit(t *testing.T) {
 		t.Errorf("ServerName should not be empty")
 	}
 	if packet.Level != ERROR {
-		t.Errorf("incorrect Level: got %d, want %d", packet.Level, ERROR)
+		t.Errorf("incorrect Level: got %s, want %s", packet.Level, ERROR)
 	}
 	if packet.Logger != "root" {
 		t.Errorf("incorrect Logger: got %s, want %s", packet.Logger, "root")
@@ -239,7 +239,7 @@ func TestUnmarshalTimestamp(t *testing.T) {
 	}
 
 	if actual != expected {
-		t.Errorf("incorrect string; got %s, want %s", actual, expected)
+		t.Errorf("incorrect string; got %s, want %s", actual.Format("2006-01-02 15:04:05 -0700"), expected.Format("2006-01-02 15:04:05 -0700"))
 	}
 }
 
@@ -274,5 +274,46 @@ func TestCaptureNilError(t *testing.T) {
 	eventID := client.CaptureError(nil, nil)
 	if eventID != "" {
 		t.Error("expected empty eventID:", eventID)
+	}
+}
+
+func TestNewPacketWithExtraSetsDefault(t *testing.T) {
+	testCases := []struct {
+		Extra    Extra
+		Expected Extra
+	}{
+		// Defaults should be set when nil is passed
+		{
+			Extra:    nil,
+			Expected: setExtraDefaults(Extra{}),
+		},
+		// Defaults should be set when empty is passed
+		{
+			Extra:    Extra{},
+			Expected: setExtraDefaults(Extra{}),
+		},
+		// Packet should always override default keys
+		{
+			Extra: Extra{
+				"runtime.Version": "notagoversion",
+			},
+			Expected: setExtraDefaults(Extra{}),
+		},
+		// Packet should include our extra info
+		{
+			Extra: Extra{
+				"extra.extra": "extra",
+			},
+			Expected: setExtraDefaults(Extra{
+				"extra.extra": "extra",
+			}),
+		},
+	}
+
+	for i, test := range testCases {
+		packet := NewPacketWithExtra("packet", test.Extra)
+		if !reflect.DeepEqual(packet.Extra, test.Expected) {
+			t.Errorf("Case [%d]: Expected packet: %+v, got: %+v", i, test.Expected, packet.Extra)
+		}
 	}
 }
