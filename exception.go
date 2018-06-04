@@ -20,7 +20,7 @@ func NewException(err error, stacktrace *Stacktrace) *Exception {
 	return ex
 }
 
-// http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Exception
+// https://docs.getsentry.com/hosted/clientdev/interfaces/#failure-interfaces
 type Exception struct {
 	// Required
 	Value string `json:"value"`
@@ -39,3 +39,12 @@ func (e *Exception) Culprit() string {
 	}
 	return e.Stacktrace.Culprit()
 }
+
+// Exceptions allows for chained errors
+// https://docs.sentry.io/clientdev/interfaces/exception/
+type Exceptions struct {
+	// Required
+	Values []*Exception `json:"values"`
+}
+
+func (es Exceptions) Class() string { return "exception" }

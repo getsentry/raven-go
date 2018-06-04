@@ -32,7 +32,8 @@ Configuring the Client
 
 To use ``raven-go``, you'll need to import the ``raven`` package, then initilize your
 DSN globally. If you specify the ``SENTRY_DSN`` environment variable, this will be
-done automatically for you.
+done automatically for you. The release and environment can also be specified in the
+environment variables ``SENTRY_RELEASE`` and ``SENTRY_ENVIRONMENT`` respectively.
 
 .. sourcecode:: go
 
@@ -83,6 +84,23 @@ as the second argument. For example:
     raven.CaptureError(err, map[string]string{"browser": "Firefox"})
 
 Tags in Sentry help to categories and give you more information about the errors that happened.
+
+Event Sampling
+--------------------
+
+To setup client side sampling you can use ``SetSampleRate`` Client function.
+Error sampling is disabled by default (sampleRate=1).
+
+.. sourcecode:: go
+
+    package main
+
+    import "github.com/getsentry/raven-go"
+
+    func init() {
+        raven.SetSampleRate(0.25)
+    }
+
 
 Deep Dive
 ---------

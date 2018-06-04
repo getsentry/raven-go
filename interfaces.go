@@ -1,6 +1,6 @@
 package raven
 
-// http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Message
+// https://docs.getsentry.com/hosted/clientdev/interfaces/#message-interface
 type Message struct {
 	// Required
 	Message string `json:"message"`
@@ -11,7 +11,7 @@ type Message struct {
 
 func (m *Message) Class() string { return "logentry" }
 
-// http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Template
+// https://docs.getsentry.com/hosted/clientdev/interfaces/#template-interface
 type Template struct {
 	// Required
 	Filename    string `json:"filename"`
@@ -26,7 +26,7 @@ type Template struct {
 
 func (t *Template) Class() string { return "template" }
 
-// http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.User
+// https://docs.getsentry.com/hosted/clientdev/interfaces/#context-interfaces
 type User struct {
 	// All fields are optional
 	ID       string `json:"id,omitempty"`
@@ -37,7 +37,7 @@ type User struct {
 
 func (h *User) Class() string { return "user" }
 
-// http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Query
+// https://docs.getsentry.com/hosted/clientdev/interfaces/#context-interfaces
 type Query struct {
 	// Required
 	Query string `json:"query"`
