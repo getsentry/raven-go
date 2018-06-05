@@ -813,13 +813,13 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 			if client.shouldExcludeErr(rval.Error()) {
 				return
 			}
-			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
 			if client.shouldExcludeErr(rvalStr) {
 				return
 			}
-			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
+			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
 		}
 
 		var ch chan error
