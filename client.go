@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -12,26 +13,32 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
+	mrand "math/rand"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/certifi/gocertifi"
+	pkgErrors "github.com/pkg/errors"
 )
 
 const (
 	userAgent       = "raven-go/1.0"
-	timestampFormat = `"2006-01-02T15:04:05"`
+	timestampFormat = `"2006-01-02T15:04:05.00"`
 )
 
 var (
 	ErrPacketDropped         = errors.New("raven: packet dropped")
 	ErrUnableToUnmarshalJSON = errors.New("raven: unable to unmarshal JSON")
 	ErrMissingUser           = errors.New("raven: dsn missing public key and/or password")
-	ErrMissingPrivateKey     = errors.New("raven: dsn missing private key")
 	ErrMissingProjectID      = errors.New("raven: dsn missing project id")
+	ErrInvalidSampleRate     = errors.New("raven: sample rate should be between 0 and 1")
 )
 
 type Severity string
@@ -61,6 +68,11 @@ func (timestamp *Timestamp) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (timestamp Timestamp) Format(format string) string {
+	t := time.Time(timestamp)
+	return t.Format(format)
+}
+
 // An Interface is a Sentry interface that will be serialized as JSON.
 // It must implement json.Marshaler or use json struct tags.
 type Interface interface {
@@ -75,6 +87,8 @@ type Culpriter interface {
 type Transport interface {
 	Send(url, authHeader string, packet *Packet) error
 }
+
+type Extra map[string]interface{}
 
 type outgoingPacket struct {
 	packet *Packet
@@ -129,7 +143,7 @@ func (t *Tags) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// http://sentry.readthedocs.org/en/latest/developer/client/index.html#building-the-json-packet
+// https://docs.getsentry.com/hosted/clientdev/#building-the-json-packet
 type Packet struct {
 	// Required
 	Message string `json:"message"`
@@ -142,31 +156,50 @@ type Packet struct {
 	Logger    string    `json:"logger"`
 
 	// Optional
-	Platform    string                 `json:"platform,omitempty"`
-	Culprit     string                 `json:"culprit,omitempty"`
-	ServerName  string                 `json:"server_name,omitempty"`
-	Release     string                 `json:"release,omitempty"`
-	Tags        Tags                   `json:"tags,omitempty"`
-	Modules     map[string]string      `json:"modules,omitempty"`
-	Fingerprint []string               `json:"fingerprint,omitempty"`
-	Extra       map[string]interface{} `json:"extra,omitempty"`
+	Platform    string            `json:"platform,omitempty"`
+	Culprit     string            `json:"culprit,omitempty"`
+	ServerName  string            `json:"server_name,omitempty"`
+	Release     string            `json:"release,omitempty"`
+	Environment string            `json:"environment,omitempty"`
+	Tags        Tags              `json:"tags,omitempty"`
+	Modules     map[string]string `json:"modules,omitempty"`
+	Fingerprint []string          `json:"fingerprint,omitempty"`
+	Extra       Extra             `json:"extra,omitempty"`
 
 	Interfaces []Interface `json:"-"`
 }
 
 // NewPacket constructs a packet with the specified message and interfaces.
 func NewPacket(message string, interfaces ...Interface) *Packet {
-	extra := map[string]interface{}{
-		"runtime.Version":      runtime.Version(),
-		"runtime.NumCPU":       runtime.NumCPU(),
-		"runtime.GOMAXPROCS":   runtime.GOMAXPROCS(0), // 0 just returns the current value
-		"runtime.NumGoroutine": runtime.NumGoroutine(),
-	}
+	extra := Extra{}
+	setExtraDefaults(extra)
 	return &Packet{
 		Message:    message,
 		Interfaces: interfaces,
 		Extra:      extra,
 	}
+}
+
+// NewPacketWithExtra constructs a packet with the specified message, extra information, and interfaces.
+func NewPacketWithExtra(message string, extra Extra, interfaces ...Interface) *Packet {
+	if extra == nil {
+		extra = Extra{}
+	}
+	setExtraDefaults(extra)
+
+	return &Packet{
+		Message:    message,
+		Interfaces: interfaces,
+		Extra:      extra,
+	}
+}
+
+func setExtraDefaults(extra Extra) Extra {
+	extra["runtime.Version"] = runtime.Version()
+	extra["runtime.NumCPU"] = runtime.NumCPU()
+	extra["runtime.GOMAXPROCS"] = runtime.GOMAXPROCS(0) // 0 just returns the current value
+	extra["runtime.NumGoroutine"] = runtime.NumGoroutine()
+	return extra
 }
 
 // Init initializes required fields in a packet. It is typically called by
@@ -231,8 +264,11 @@ func uuid() (string, error) {
 	return hex.EncodeToString(id), nil
 }
 
-func (packet *Packet) JSON() []byte {
-	packetJSON, _ := json.Marshal(packet)
+func (packet *Packet) JSON() ([]byte, error) {
+	packetJSON, err := json.Marshal(packet)
+	if err != nil {
+		return nil, err
+	}
 
 	interfaces := make(map[string]Interface, len(packet.Interfaces))
 	for _, inter := range packet.Interfaces {
@@ -242,12 +278,15 @@ func (packet *Packet) JSON() []byte {
 	}
 
 	if len(interfaces) > 0 {
-		interfaceJSON, _ := json.Marshal(interfaces)
+		interfaceJSON, err := json.Marshal(interfaces)
+		if err != nil {
+			return nil, err
+		}
 		packetJSON[len(packetJSON)-1] = ','
 		packetJSON = append(packetJSON, interfaceJSON[1:]...)
 	}
 
-	return packetJSON
+	return packetJSON, nil
 }
 
 type context struct {
@@ -256,9 +295,9 @@ type context struct {
 	tags map[string]string
 }
 
-func (c *context) SetUser(u *User) { c.user = u }
-func (c *context) SetHttp(h *Http) { c.http = h }
-func (c *context) SetTags(t map[string]string) {
+func (c *context) setUser(u *User) { c.user = u }
+func (c *context) setHttp(h *Http) { c.http = h }
+func (c *context) setTags(t map[string]string) {
 	if c.tags == nil {
 		c.tags = make(map[string]string)
 	}
@@ -266,7 +305,7 @@ func (c *context) SetTags(t map[string]string) {
 		c.tags[k] = v
 	}
 }
-func (c *context) Clear() {
+func (c *context) clear() {
 	c.user = nil
 	c.http = nil
 	c.tags = nil
@@ -297,15 +336,33 @@ func (c *context) interfaces() []Interface {
 // Packets will be dropped if the buffer is full. Used by NewClient.
 var MaxQueueBuffer = 100
 
+func newTransport() Transport {
+	t := &HTTPTransport{}
+	rootCAs, err := gocertifi.CACerts()
+	if err != nil {
+		log.Println("raven: failed to load root TLS certificates:", err)
+	} else {
+		t.Client = &http.Client{
+			Transport: &http.Transport{
+				Proxy:           http.ProxyFromEnvironment,
+				TLSClientConfig: &tls.Config{RootCAs: rootCAs},
+			},
+		}
+	}
+	return t
+}
+
 func newClient(tags map[string]string) *Client {
 	client := &Client{
-		Transport: &HTTPTransport{},
-		Tags:      tags,
-		context:   &context{},
-		queue:     make(chan *outgoingPacket, MaxQueueBuffer),
+		Transport:  newTransport(),
+		Tags:       tags,
+		context:    &context{},
+		sampleRate: 1.0,
+		queue:      make(chan *outgoingPacket, MaxQueueBuffer),
 	}
-	go client.worker()
 	client.SetDSN(os.Getenv("SENTRY_DSN"))
+	client.SetRelease(os.Getenv("SENTRY_RELEASE"))
+	client.SetEnvironment(os.Getenv("SENTRY_ENVIRONMENT"))
 	return client
 }
 
@@ -344,23 +401,56 @@ type Client struct {
 	// Context that will get appending to all packets
 	context *context
 
-	mu           sync.RWMutex
-	url          string
-	projectID    string
-	authHeader   string
-	release      string
-	includePaths []string
-	skipFrames   int
-	queue        chan *outgoingPacket
+	mu          sync.RWMutex
+	url         string
+	projectID   string
+	authHeader  string
+	release     string
+	environment string
+	sampleRate  float32
+	skipFrames  int
+
+	// default logger name (leave empty for 'root')
+	defaultLoggerName string
+
+	includePaths       []string
+	ignoreErrorsRegexp *regexp.Regexp
+	queue              chan *outgoingPacket
 
 	// A WaitGroup to keep track of all currently in-progress captures
 	// This is intended to be used with Client.Wait() to assure that
 	// all messages have been transported before exiting the process.
 	wg sync.WaitGroup
+
+	// A Once to track only starting up the background worker once
+	start sync.Once
 }
 
 // Initialize a default *Client instance
 var DefaultClient = newClient(nil)
+
+func (c *Client) SetIgnoreErrors(errs []string) error {
+	joinedRegexp := strings.Join(errs, "|")
+	r, err := regexp.Compile(joinedRegexp)
+	if err != nil {
+		return fmt.Errorf("failed to compile regexp %q for %q: %v", joinedRegexp, errs, err)
+	}
+
+	c.mu.Lock()
+	c.ignoreErrorsRegexp = r
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *Client) shouldExcludeErr(errStr string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ignoreErrorsRegexp != nil && c.ignoreErrorsRegexp.MatchString(errStr)
+}
+
+func SetIgnoreErrors(errs ...string) error {
+	return DefaultClient.SetIgnoreErrors(errs)
+}
 
 // SetDSN updates a client with a new DSN. It safe to call after and
 // concurrently with calls to Report and Send.
@@ -381,10 +471,7 @@ func (client *Client) SetDSN(dsn string) error {
 		return ErrMissingUser
 	}
 	publicKey := uri.User.Username()
-	secretKey, ok := uri.User.Password()
-	if !ok {
-		return ErrMissingPrivateKey
-	}
+	secretKey, hasSecretKey := uri.User.Password()
 	uri.User = nil
 
 	if idx := strings.LastIndex(uri.Path, "/"); idx != -1 {
@@ -397,7 +484,11 @@ func (client *Client) SetDSN(dsn string) error {
 
 	client.url = uri.String()
 
-	client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
+	if hasSecretKey {
+		client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s, sentry_secret=%s", publicKey, secretKey)
+	} else {
+		client.authHeader = fmt.Sprintf("Sentry sentry_version=4, sentry_key=%s", publicKey)
+	}
 
 	return nil
 }
@@ -412,8 +503,45 @@ func (client *Client) SetRelease(release string) {
 	client.release = release
 }
 
+// SetEnvironment sets the "environment" tag.
+func (client *Client) SetEnvironment(environment string) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.environment = environment
+}
+
+// SetDefaultLoggerName sets the default logger name.
+func (client *Client) SetDefaultLoggerName(name string) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.defaultLoggerName = name
+}
+
+// SetSampleRate sets how much sampling we want on client side
+func (client *Client) SetSampleRate(rate float32) error {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
+	if rate < 0 || rate > 1 {
+		return ErrInvalidSampleRate
+	}
+	client.sampleRate = rate
+	return nil
+}
+
 // SetRelease sets the "release" tag on the default *Client
 func SetRelease(release string) { DefaultClient.SetRelease(release) }
+
+// SetEnvironment sets the "environment" tag on the default *Client
+func SetEnvironment(environment string) { DefaultClient.SetEnvironment(environment) }
+
+// SetDefaultLoggerName sets the "defaultLoggerName" on the default *Client
+func SetDefaultLoggerName(name string) {
+	DefaultClient.SetDefaultLoggerName(name)
+}
+
+// SetSampleRate sets the "sample rate" on the degault *Client
+func SetSampleRate(rate float32) error { return DefaultClient.SetSampleRate(rate) }
 
 func (client *Client) worker() {
 	for outgoingPacket := range client.queue {
@@ -440,7 +568,24 @@ func SetSkipFrames(skip int) { DefaultClient.SetSkipFrames(skip) }
 // when client is nil. A channel is provided if it is important to check for a
 // send's success.
 func (client *Client) Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
+	ch = make(chan error, 1)
+
 	if client == nil {
+		// return a chan that always returns nil when the caller receives from it
+		close(ch)
+		return
+	}
+
+	if client.sampleRate < 1.0 && mrand.Float32() > client.sampleRate {
+		return
+	}
+
+	if packet == nil {
+		close(ch)
+		return
+	}
+
+	if client.shouldExcludeErr(packet.Message) {
 		return
 	}
 
@@ -449,18 +594,23 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	// finished being acted upon, whether success or failure
 	client.wg.Add(1)
 
-	ch = make(chan error, 1)
-
 	// Merge capture tags and client tags
 	packet.AddTags(captureTags)
 	packet.AddTags(client.Tags)
-	packet.AddTags(client.context.tags)
 
 	// Initialize any required packet fields
 	client.mu.RLock()
+	packet.AddTags(client.context.tags)
 	projectID := client.projectID
 	release := client.release
+	environment := client.environment
+	defaultLoggerName := client.defaultLoggerName
 	client.mu.RUnlock()
+
+	// set the global logger name on the packet if we must
+	if packet.Logger == "" && defaultLoggerName != "" {
+		packet.Logger = defaultLoggerName
+	}
 
 	err := packet.Init(projectID)
 	if err != nil {
@@ -468,9 +618,22 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 		client.wg.Done()
 		return
 	}
-	packet.Release = release
+
+	if packet.Release == "" {
+		packet.Release = release
+	}
+
+	if packet.Environment == "" {
+		packet.Environment = environment
+	}
 
 	outgoingPacket := &outgoingPacket{packet, ch}
+
+	// Lazily start background worker until we
+	// do our first write into the queue.
+	client.start.Do(func() {
+		go client.worker()
+	})
 
 	select {
 	case client.queue <- outgoingPacket:
@@ -499,6 +662,10 @@ func (client *Client) CaptureMessage(message string, tags map[string]string, int
 		return ""
 	}
 
+	if client.shouldExcludeErr(message) {
+		return ""
+	}
+
 	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
 	eventID, _ := client.Capture(packet, tags)
 
@@ -516,9 +683,15 @@ func (client *Client) CaptureMessageAndWait(message string, tags map[string]stri
 		return ""
 	}
 
+	if client.shouldExcludeErr(message) {
+		return ""
+	}
+
 	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
 	eventID, ch := client.Capture(packet, tags)
-	<-ch
+	if eventID != "" {
+		<-ch
+	}
 
 	return eventID
 }
@@ -535,7 +708,18 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 		return ""
 	}
 
-	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1+client.skipFrames, 3, client.includePaths)))...)
+	if err == nil {
+		return ""
+	}
+
+	if client.shouldExcludeErr(err.Error()) {
+		return ""
+	}
+
+	extra := extractExtra(err)
+	cause := pkgErrors.Cause(err)
+
+	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1+client.skipFrames, 3, client.includePaths)))...)
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -553,9 +737,18 @@ func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, int
 		return ""
 	}
 
-	packet := NewPacket(err.Error(), append(append(interfaces, client.context.interfaces()...), NewException(err, NewStacktrace(1+client.skipFrames, 3, client.includePaths)))...)
+	if client.shouldExcludeErr(err.Error()) {
+		return ""
+	}
+
+	extra := extractExtra(err)
+	cause := pkgErrors.Cause(err)
+
+	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1+client.skipFrames, 3, client.includePaths)))...)
 	eventID, ch := client.Capture(packet, tags)
-	<-ch
+	if eventID != "" {
+		<-ch
+	}
 
 	return eventID
 }
@@ -579,9 +772,15 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 		case nil:
 			return
 		case error:
+			if client.shouldExcludeErr(rval.Error()) {
+				return
+			}
 			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
 		default:
 			rvalStr := fmt.Sprint(rval)
+			if client.shouldExcludeErr(rvalStr) {
+				return
+			}
 			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
 		}
 
@@ -596,6 +795,47 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 // If an error is captured, both the error and the reported Sentry error ID are returned.
 func CapturePanic(f func(), tags map[string]string, interfaces ...Interface) (interface{}, string) {
 	return DefaultClient.CapturePanic(f, tags, interfaces...)
+}
+
+// CapturePanicAndWait is identical to CaptureError, except it blocks and assures that the event was sent
+func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
+	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
+	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
+	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
+	// be completely noop though if we cared.
+	defer func() {
+		var packet *Packet
+		err = recover()
+		switch rval := err.(type) {
+		case nil:
+			return
+		case error:
+			if client.shouldExcludeErr(rval.Error()) {
+				return
+			}
+			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
+		default:
+			rvalStr := fmt.Sprint(rval)
+			if client.shouldExcludeErr(rvalStr) {
+				return
+			}
+			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2+client.skipFrames, 3, client.includePaths)))...)
+		}
+
+		var ch chan error
+		errorID, ch = client.Capture(packet, tags)
+		if errorID != "" {
+			<-ch
+		}
+	}()
+
+	f()
+	return
+}
+
+// CapturePanicAndWait is identical to CaptureError, except it blocks and assures that the event was sent
+func CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (interface{}, string) {
+	return DefaultClient.CapturePanicAndWait(f, tags, interfaces...)
 }
 
 func (client *Client) Close() {
@@ -657,10 +897,29 @@ func (client *Client) SetIncludePaths(p []string) {
 	client.includePaths = p
 }
 
-func (c *Client) SetUserContext(u *User)             { c.context.SetUser(u) }
-func (c *Client) SetHttpContext(h *Http)             { c.context.SetHttp(h) }
-func (c *Client) SetTagsContext(t map[string]string) { c.context.SetTags(t) }
-func (c *Client) ClearContext()                      { c.context.Clear() }
+func (c *Client) SetUserContext(u *User) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.setUser(u)
+}
+
+func (c *Client) SetHttpContext(h *Http) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.setHttp(h)
+}
+
+func (c *Client) SetTagsContext(t map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.setTags(t)
+}
+
+func (c *Client) ClearContext() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.context.clear()
+}
 
 func SetUserContext(u *User)             { DefaultClient.SetUserContext(u) }
 func SetHttpContext(h *Http)             { DefaultClient.SetHttpContext(h) }
@@ -670,7 +929,7 @@ func ClearContext()                      { DefaultClient.ClearContext() }
 // HTTPTransport is the default transport, delivering packets to Sentry via the
 // HTTP API.
 type HTTPTransport struct {
-	Http http.Client
+	*http.Client
 }
 
 func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
@@ -678,12 +937,18 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 		return nil
 	}
 
-	body, contentType := serializedPacket(packet)
-	req, _ := http.NewRequest("POST", url, body)
+	body, contentType, err := serializedPacket(packet)
+	if err != nil {
+		return fmt.Errorf("error serializing packet: %v", err)
+	}
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return fmt.Errorf("can't create new request: %v", err)
+	}
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", contentType)
-	res, err := t.Http.Do(req)
+	res, err := t.Do(req)
 	if err != nil {
 		return err
 	}
@@ -695,8 +960,11 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	return nil
 }
 
-func serializedPacket(packet *Packet) (r io.Reader, contentType string) {
-	packetJSON := packet.JSON()
+func serializedPacket(packet *Packet) (io.Reader, string, error) {
+	packetJSON, err := packet.JSON()
+	if err != nil {
+		return nil, "", fmt.Errorf("error marshaling packet %+v to JSON: %v", packet, err)
+	}
 
 	// Only deflate/base64 the packet if it is bigger than 1KB, as there is
 	// overhead.
@@ -707,9 +975,9 @@ func serializedPacket(packet *Packet) (r io.Reader, contentType string) {
 		deflate.Write(packetJSON)
 		deflate.Close()
 		b64.Close()
-		return buf, "application/octet-stream"
+		return buf, "application/octet-stream", nil
 	}
-	return bytes.NewReader(packetJSON), "application/json"
+	return bytes.NewReader(packetJSON), "application/json", nil
 }
 
 var hostname string
