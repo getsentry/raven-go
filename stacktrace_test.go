@@ -93,7 +93,7 @@ func TestStacktrace(t *testing.T) {
 	if f.Module != thisPackage {
 		t.Error("incorrect Module:", f.Module)
 	}
-	if f.Lineno != 87 {
+	if f.Lineno != 121 {
 		t.Error("incorrect Lineno:", f.Lineno)
 	}
 	if f.ContextLine != "\treturn NewStacktrace(0, 2, []string{thisPackage})" {
