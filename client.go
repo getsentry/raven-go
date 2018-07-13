@@ -635,6 +635,7 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 		ch <- ErrPacketDropped
 		client.wg.Done()
 	}
+	client.wg.Wait()
 
 	return packet.EventID, ch
 }
