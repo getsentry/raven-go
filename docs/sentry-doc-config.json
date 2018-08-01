@@ -15,7 +15,7 @@
     "go.http": {
       "name": "net/http",
       "type": "framework",
-      "doc_wizard": "integrations/http/",
+      "doc_link": "integrations/http/",
       "wizard": [
         "integrations/http#installation",
         "integrations/http#setup"
