@@ -195,7 +195,7 @@ type SourceCodeLoader interface {
 	Load(filename string, line, context int) ([][]byte, int)
 }
 
-var sourceCodeLoader SourceCodeLoader = fsLoader{cache: make(map[string][][]byte)}
+var sourceCodeLoader SourceCodeLoader = &fsLoader{cache: make(map[string][][]byte)}
 
 func SetSourceCodeLoader(loader SourceCodeLoader) {
 	sourceCodeLoader = loader
@@ -206,7 +206,7 @@ type fsLoader struct {
 	cache map[string][][]byte
 }
 
-func (fs fsLoader) Load(filename string, line, context int) ([][]byte, int) {
+func (fs *fsLoader) Load(filename string, line, context int) ([][]byte, int) {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	lines, ok := fs.cache[filename]
