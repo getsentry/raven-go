@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"go/build"
 	"io/ioutil"
+	"net/url"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -186,6 +187,10 @@ func splitFunctionName(name string) (string, string) {
 	if pos := strings.Index(name, "."); pos != -1 {
 		pack += name[:pos]
 		name = name[pos+1:]
+	}
+
+	if p, err := url.QueryUnescape(pack); err == nil {
+		pack = p
 	}
 
 	return pack, name
