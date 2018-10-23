@@ -169,7 +169,7 @@ func TestNewStacktrace_noFrames(t *testing.T) {
 
 func TestFileContext(t *testing.T) {
 	// reset the cache
-	sourceCodeLoader = fsLoader{cache: make(map[string][][]byte)}
+	sourceCodeLoader = &fsLoader{cache: make(map[string][][]byte)}
 
 	tempdir, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -205,7 +205,7 @@ func TestFileContext(t *testing.T) {
 			t.Errorf("%d: fileContext(%#v, 1, 0) = %v, %v; expected len()=%d, %d",
 				i, test.path, lines, index, test.expectedLines, test.expectedIndex)
 		}
-		cacheLen := len(sourceCodeLoader.(fsLoader).cache)
+		cacheLen := len(sourceCodeLoader.(*fsLoader).cache)
 		if cacheLen != i+1 {
 			t.Errorf("%d: result was not cached; len=%d", i, cacheLen)
 		}
