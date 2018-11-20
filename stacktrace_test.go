@@ -36,38 +36,13 @@ var (
 func TestFunctionName(t *testing.T) {
 	for _, test := range functionNameTests {
 		pc, _, _, _ := runtime.Caller(test.skip)
-		pack, name := functionName(pc)
+		pack, name := functionName(runtime.FuncForPC(pc).Name())
 
 		if pack != test.pack {
 			t.Errorf("incorrect package; got %s, want %s", pack, test.pack)
 		}
 		if name != test.name {
 			t.Errorf("incorrect function; got %s, want %s", name, test.name)
-		}
-	}
-}
-
-func TestSplitFunctionName(t *testing.T) {
-	tests := []struct {
-		in         string
-		pack, name string
-	}{
-		{"", "", ""},
-		{"main.main", "main", "main"},
-		{"main.main.func1", "main", "main.func1"},
-		{"cmd/main.main", "cmd/main", "main"},
-		{"cmd/main.main.func1", "cmd/main", "main.func1"},
-		{"cmd/main.main.func1.1", "cmd/main", "main.func1.1"},
-		{"cmd/main.main.func1.1.1", "cmd/main", "main.func1.1.1"},
-		{"cmd/main.(*T).Do", "cmd/main", "(*T).Do"},
-		{"cmd/main.*T.Do", "cmd/main", "*T.Do"},
-		{`github.com/getsentry/dot%2epackage.*T.Do`, "github.com/getsentry/dot.package", "*T.Do"},
-	}
-
-	for _, test := range tests {
-		pack, name := splitFunctionName(test.in)
-		if pack != test.pack || name != test.name {
-			t.Errorf("wrong answer from splitFunctionName(%q); got (%q, %q), but want (%q, %q)", test.in, test.pack, test.name, pack, name)
 		}
 	}
 }
@@ -94,7 +69,7 @@ func TestStacktrace(t *testing.T) {
 	if f.Module != thisPackage {
 		t.Error("incorrect Module:", f.Module)
 	}
-	if f.Lineno != 122 {
+	if f.Lineno != 97 {
 		t.Error("incorrect Lineno:", f.Lineno)
 	}
 	if f.ContextLine != "\treturn NewStacktrace(0, 2, []string{thisPackage})" {
@@ -170,7 +145,7 @@ func TestNewStacktrace_noFrames(t *testing.T) {
 
 func TestFileContext(t *testing.T) {
 	// reset the cache
-	sourceCodeLoader = &fsLoader{cache: make(map[string][][]byte)}
+	fileCache = make(map[string][][]byte)
 
 	tempdir, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -201,12 +176,12 @@ func TestFileContext(t *testing.T) {
 		{noPermissionPath, 0, 0},
 	}
 	for i, test := range tests {
-		lines, index := sourceCodeLoader.Load(test.path, 1, 0)
+		lines, index := fileContext(test.path, 1, 0)
 		if !(len(lines) == test.expectedLines && index == test.expectedIndex) {
 			t.Errorf("%d: fileContext(%#v, 1, 0) = %v, %v; expected len()=%d, %d",
 				i, test.path, lines, index, test.expectedLines, test.expectedIndex)
 		}
-		cacheLen := len(sourceCodeLoader.(*fsLoader).cache)
+		cacheLen := len(fileCache)
 		if cacheLen != i+1 {
 			t.Errorf("%d: result was not cached; len=%d", i, cacheLen)
 		}
