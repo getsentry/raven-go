@@ -2,6 +2,7 @@ package raven
 
 import (
 	"encoding/json"
+	"net/http"
 	"reflect"
 	"testing"
 	"time"
@@ -143,6 +144,19 @@ func TestSetDSN(t *testing.T) {
 	}
 	if client.authHeader != "Sentry sentry_version=4, sentry_key=u, sentry_secret=p" {
 		t.Error("incorrect authHeader:", client.authHeader)
+	}
+}
+
+func TestSetSSLVerification(t *testing.T) {
+	client := newClient(nil)
+	err := client.SetSSLVerification(false)
+	if err != nil {
+		t.Error("Unable to disable SSL verification:", err)
+	}
+	transport := client.Transport.(*HTTPTransport)
+	httpTransporttransport := transport.Client.Transport.(*http.Transport)
+	if !httpTransporttransport.TLSClientConfig.InsecureSkipVerify {
+		t.Error("incorrect ssl verification policy")
 	}
 }
 

@@ -492,8 +492,25 @@ func (client *Client) SetDSN(dsn string) error {
 	return nil
 }
 
+// SetSSLVerification sets the SSL verification poilcy of the client.
+func (client *Client) SetSSLVerification(verify bool) error {
+	transport, ok := client.Transport.(*HTTPTransport)
+	if !ok {
+		return fmt.Errorf("No HTTP transport defined for client")
+	}
+	httpTransporttransport, ok := transport.Client.Transport.(*http.Transport)
+	if !ok {
+		return fmt.Errorf("Couldn't convert http.Client transport to http.Transport")
+	}
+	httpTransporttransport.TLSClientConfig.InsecureSkipVerify = !verify
+	return nil
+}
+
 // Sets the DSN for the default *Client instance
 func SetDSN(dsn string) error { return DefaultClient.SetDSN(dsn) }
+
+// Sets the SSL Verification for the default *Client instance
+func SetSSLVerification(verify bool) error { return DefaultClient.SetSSLVerification(verify) }
 
 // SetRelease sets the "release" tag.
 func (client *Client) SetRelease(release string) {
