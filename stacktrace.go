@@ -58,7 +58,7 @@ func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []s
 	})
 	if errHasStacktrace {
 		var frames []*StacktraceFrame
-		for _, f := range stacktracer.StackTrace() {
+		for f := range stacktracer.StackTrace() {
 			pc := uintptr(f) - 1
 			fn := runtime.FuncForPC(pc)
 			var fName string
