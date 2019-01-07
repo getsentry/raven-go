@@ -6,6 +6,7 @@ import (
 	"compress/zlib"
 	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -13,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	mrand "math/rand"
 	"net/http"
 	"net/url"
@@ -336,25 +336,9 @@ func (c *context) interfaces() []Interface {
 // Packets will be dropped if the buffer is full. Used by NewClient.
 var MaxQueueBuffer = 100
 
-func newTransport() Transport {
-	t := &HTTPTransport{}
-	rootCAs, err := gocertifi.CACerts()
-	if err != nil {
-		log.Println("raven: failed to load root TLS certificates:", err)
-	} else {
-		t.Client = &http.Client{
-			Transport: &http.Transport{
-				Proxy:           http.ProxyFromEnvironment,
-				TLSClientConfig: &tls.Config{RootCAs: rootCAs},
-			},
-		}
-	}
-	return t
-}
-
 func newClient(tags map[string]string) *Client {
 	client := &Client{
-		Transport:  newTransport(),
+		Transport:  NewHTTPTransport(nil),
 		Tags:       tags,
 		context:    &context{},
 		sampleRate: 1.0,
@@ -527,6 +511,16 @@ func (client *Client) SetSampleRate(rate float32) error {
 	client.sampleRate = rate
 	return nil
 }
+
+// SetTransport sets the client's Transport
+func (client *Client) SetTransport(t Transport) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.Transport = t
+}
+
+// SetTransport sets the Transport on the default *Client
+func SetTransport(t Transport) { DefaultClient.SetTransport(t) }
 
 // SetRelease sets the "release" tag on the default *Client
 func SetRelease(release string) { DefaultClient.SetRelease(release) }
@@ -920,6 +914,34 @@ func ClearContext()                      { DefaultClient.ClearContext() }
 // HTTP API.
 type HTTPTransport struct {
 	*http.Client
+}
+
+// HTTPTransportOptions are options to configure the HTTPTransport
+type HTTPTransportOptions struct {
+	InsecureSkipVerify bool
+	RootCAs            *x509.CertPool
+}
+
+func NewHTTPTransport(o *HTTPTransportOptions) *HTTPTransport {
+	if o == nil {
+		o = &HTTPTransportOptions{}
+	}
+	if o.RootCAs == nil {
+		// This can't actually error, so there's no point.
+		rootCAs, _ := gocertifi.CACerts()
+		o.RootCAs = rootCAs
+	}
+	return &HTTPTransport{
+		Client: &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				TLSClientConfig: &tls.Config{
+					RootCAs:            o.RootCAs,
+					InsecureSkipVerify: o.InsecureSkipVerify,
+				},
+			},
+		},
+	}
 }
 
 func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
