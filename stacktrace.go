@@ -51,12 +51,24 @@ type StacktraceFrame struct {
 	InApp        bool     `json:"in_app"`
 }
 
+type StackTracer interface {
+	StackTrace() errors.StackTrace
+}
+
 // Try to get stacktrace from err as an interface of github.com/pkg/errors, or else NewStacktrace()
-func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []string) *Stacktrace {
-	stacktracer, errHasStacktrace := err.(interface {
-		StackTrace() errors.StackTrace
-	})
-	if errHasStacktrace {
+func GetOrNewStacktrace(err, cause error, skip int, context int, appPackagePrefixes []string) *Stacktrace {
+	// use the stacktrace of cause
+	var stacktracer StackTracer
+	var causeHasStacktrace, errHasStacktrace bool
+	stacktracer, causeHasStacktrace = cause.(StackTracer)
+
+	// if cause doesn't have a stacktrace, use the one of err
+	if !causeHasStacktrace {
+		stacktracer, errHasStacktrace = err.(StackTracer)
+	}
+
+	// if either has a trace, we can generate from it
+	if causeHasStacktrace || errHasStacktrace {
 		var frames []*StacktraceFrame
 		for f := range stacktracer.StackTrace() {
 			pc := uintptr(f) - 1
