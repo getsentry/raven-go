@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	pingcap "github.com/pingcap/errors"
 	"github.com/pkg/errors"
 )
 
@@ -51,32 +52,62 @@ type StacktraceFrame struct {
 	InApp        bool     `json:"in_app"`
 }
 
-// Try to get stacktrace from err as an interface of github.com/pkg/errors, or else NewStacktrace()
-func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []string) *Stacktrace {
-	stacktracer, errHasStacktrace := err.(interface {
-		StackTrace() errors.StackTrace
-	})
-	if errHasStacktrace {
-		var frames []*StacktraceFrame
-		for f := range stacktracer.StackTrace() {
-			pc := uintptr(f) - 1
-			fn := runtime.FuncForPC(pc)
-			var fName string
-			var file string
-			var line int
-			if fn != nil {
-				file, line = fn.FileLine(pc)
-				fName = fn.Name()
-			} else {
-				file = "unknown"
-				fName = "unknown"
-			}
-			frame := NewStacktraceFrame(pc, fName, file, line, context, appPackagePrefixes)
-			if frame != nil {
-				frames = append([]*StacktraceFrame{frame}, frames...)
-			}
+type pkgStacktracer interface {
+	StackTrace() errors.StackTrace
+}
+
+func pkgStacktrace(stacktracer pkgStacktracer, context int, appPackagePrefixes []string) *Stacktrace {
+	var frames []*StacktraceFrame
+	for f := range stacktracer.StackTrace() {
+		pc := uintptr(f) - 1
+		fn := runtime.FuncForPC(pc)
+		var fName string
+		var file string
+		var line int
+		if fn != nil {
+			file, line = fn.FileLine(pc)
+			fName = fn.Name()
+		} else {
+			file = "unknown"
+			fName = "unknown"
 		}
-		return &Stacktrace{Frames: frames}
+		frame := NewStacktraceFrame(pc, fName, file, line, context, appPackagePrefixes)
+		if frame != nil {
+			frames = append([]*StacktraceFrame{frame}, frames...)
+		}
+	}
+	return &Stacktrace{Frames: frames}
+}
+
+func pingcapStacktrace(stacktracer pingcap.StackTracer, context int, appPackagePrefixes []string) *Stacktrace {
+	var frames []*StacktraceFrame
+	for f := range stacktracer.StackTrace() {
+		pc := uintptr(f) - 1
+		fn := runtime.FuncForPC(pc)
+		var fName string
+		var file string
+		var line int
+		if fn != nil {
+			file, line = fn.FileLine(pc)
+			fName = fn.Name()
+		} else {
+			file = "unknown"
+			fName = "unknown"
+		}
+		frame := NewStacktraceFrame(pc, fName, file, line, context, appPackagePrefixes)
+		if frame != nil {
+			frames = append([]*StacktraceFrame{frame}, frames...)
+		}
+	}
+	return &Stacktrace{Frames: frames}
+}
+
+// Try to get stacktrace from err as an interface of github.com/pkg/errors or github.com/pingcap/errors, or else NewStacktrace()
+func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []string) *Stacktrace {
+	if stacktracer, errHasStacktrace := err.(pkgStacktracer); errHasStacktrace {
+		return pkgStacktrace(stacktracer, context, appPackagePrefixes)
+	} else if stacktracer, errHasStacktrace := err.(pingcap.StackTracer); errHasStacktrace {
+		return pingcapStacktrace(stacktracer, context, appPackagePrefixes)
 	} else {
 		return NewStacktrace(skip+1, context, appPackagePrefixes)
 	}
