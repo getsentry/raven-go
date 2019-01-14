@@ -6,7 +6,9 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime/debug"
+	"strconv"
 	"strings"
 )
 
@@ -63,6 +65,28 @@ type Http struct {
 
 func (h *Http) Class() string { return "request" }
 
+// Prints an argument passed to panic.
+// There's room for arbitrary complexity here, but we keep it
+// simple and handle just a few important cases: int, string, and Stringer.
+//
+// Taken from runtime/error.go in the standard library (how it prints panics)
+func printany(i interface{}) string {
+	switch v := i.(type) {
+	case nil:
+		return "nil"
+	case fmt.Stringer:
+		return v.String()
+	case error:
+		return v.Error()
+	case int:
+		return strconv.Itoa(v)
+	case string:
+		return v
+	default:
+		return fmt.Sprintf("%#v", v)
+	}
+}
+
 // Recovery handler to wrap the stdlib net/http Mux.
 // Example:
 //	http.HandleFunc("/", raven.RecoveryHandler(func(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +105,8 @@ func Recoverer(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rval := recover(); rval != nil {
+				os.Stderr.WriteString("panic: ")
+				os.Stderr.WriteString(printany(rval) + "\n\n")
 				debug.PrintStack()
 				rvalStr := fmt.Sprint(rval)
 				var packet *Packet
