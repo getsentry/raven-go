@@ -18,14 +18,15 @@ func NewHttp(req *http.Request) *Http {
 	h := &Http{
 		Method:  req.Method,
 		Cookies: req.Header.Get("Cookie"),
-		Query:   sanitizeQuery(req.URL.Query()).Encode(),
+		Query:   url.Values(sanitizeValues(req.URL.Query())).Encode(),
 		URL:     proto + "://" + req.Host + req.URL.Path,
 		Headers: make(map[string]string, len(req.Header)),
 	}
 	if addr, port, err := net.SplitHostPort(req.RemoteAddr); err == nil {
 		h.Env = map[string]string{"REMOTE_ADDR": addr, "REMOTE_PORT": port}
 	}
-	for k, v := range req.Header {
+
+	for k, v := range http.Header(sanitizeValues(req.Header)) {
 		h.Headers[k] = strings.Join(v, ",")
 	}
 	h.Headers["Host"] = req.Host
@@ -34,15 +35,22 @@ func NewHttp(req *http.Request) *Http {
 
 var querySecretFields = []string{"password", "passphrase", "passwd", "secret"}
 
-func sanitizeQuery(query url.Values) url.Values {
+func sanitizeValues(query map[string][]string) map[string][]string {
 	for _, keyword := range querySecretFields {
 		for field := range query {
-			if strings.Contains(field, keyword) {
+			if strings.Contains(strings.ToLower(field), strings.ToLower(keyword)) {
 				query[field] = []string{"********"}
 			}
 		}
 	}
 	return query
+}
+
+// AddSanitizewField adds a custom sanitize field to the array of fields to
+// search for and sanitize. This allows you to hide sensitive information in
+// both the query string and headers.
+func AddSanitizeField(field string) {
+	querySecretFields = append(querySecretFields, field)
 }
 
 // https://docs.getsentry.com/hosted/clientdev/interfaces/#context-interfaces
