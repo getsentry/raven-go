@@ -103,7 +103,7 @@ func TestExtractErrorPullsExtraData(t *testing.T) {
 				"outer": "456",
 			},
 		},
-		// Futher wrapping of errors shouldn't allow for value override
+		// Further wrapping of errors shouldn't allow for value override
 		{
 			Error: WrapWithExtra(
 				WrapWithExtra(fmt.Errorf("This is bad"),

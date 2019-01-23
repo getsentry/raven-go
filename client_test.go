@@ -52,7 +52,7 @@ func TestPacketJSON(t *testing.T) {
 		Timestamp:   Timestamp(time.Date(2000, 01, 01, 0, 0, 0, 0, time.UTC)),
 		Level:       ERROR,
 		Logger:      "com.getsentry.raven-go.logger-test-packet-json",
-		Tags:        []Tag{Tag{"foo", "bar"}},
+		Tags:        []Tag{{"foo", "bar"}},
 		Modules:     map[string]string{"foo": "bar"},
 		Fingerprint: []string{"{{ default }}", "a-custom-fingerprint"},
 		Interfaces:  []Interface{&Message{Message: "foo"}},
@@ -86,7 +86,7 @@ func TestPacketJSONNilInterface(t *testing.T) {
 		Timestamp:   Timestamp(time.Date(2000, 01, 01, 0, 0, 0, 0, time.UTC)),
 		Level:       ERROR,
 		Logger:      "com.getsentry.raven-go.logger-test-packet-json",
-		Tags:        []Tag{Tag{"foo", "bar"}},
+		Tags:        []Tag{{"foo", "bar"}},
 		Modules:     map[string]string{"foo": "bar"},
 		Fingerprint: []string{"{{ default }}", "a-custom-fingerprint"},
 		Interfaces:  []Interface{&Message{Message: "foo"}, nil},
@@ -244,7 +244,7 @@ func TestUnmarshalTimestamp(t *testing.T) {
 }
 
 func TestNilClient(t *testing.T) {
-	var client *Client = nil
+	var client *Client
 	eventID, ch := client.Capture(nil, nil)
 	if eventID != "" {
 		t.Error("expected empty eventID:", eventID)
@@ -257,7 +257,7 @@ func TestNilClient(t *testing.T) {
 }
 
 func TestCaptureNil(t *testing.T) {
-	var client *Client = DefaultClient
+	var client = DefaultClient
 	eventID, ch := client.Capture(nil, nil)
 	if eventID != "" {
 		t.Error("expected empty eventID:", eventID)
@@ -270,7 +270,7 @@ func TestCaptureNil(t *testing.T) {
 }
 
 func TestCaptureNilError(t *testing.T) {
-	var client *Client = DefaultClient
+	var client = DefaultClient
 	eventID := client.CaptureError(nil, nil)
 	if eventID != "" {
 		t.Error("expected empty eventID:", eventID)
