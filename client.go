@@ -453,7 +453,7 @@ func (client *Client) SetIgnoreErrors(errs []string) error {
 	joinedRegexp := strings.Join(errs, "|")
 	r, err := regexp.Compile(joinedRegexp)
 	if err != nil {
-		return fmt.Errorf("failed to compile regexp %q for %q: %v", joinedRegexp, errs, err)
+		return fmt.Errorf("raven: failed to compile regexp %q for %q: %v", joinedRegexp, errs, err)
 	}
 
 	client.mu.Lock()
@@ -975,11 +975,11 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 
 	body, contentType, err := serializedPacket(packet)
 	if err != nil {
-		return fmt.Errorf("error serializing packet: %v", err)
+		return fmt.Errorf("raven: error serializing packet: %v", err)
 	}
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
-		return fmt.Errorf("can't create new request: %v", err)
+		return fmt.Errorf("raven: can't create new request: %v", err)
 	}
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
@@ -993,12 +993,12 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	// Response body needs to be drained and closed in order for TCP connection to stay opened (via keep-alive) and reused
 	_, err = io.Copy(ioutil.Discard, res.Body)
 	if err != nil {
-		log.Println("Error while reading response body", res)
+		log.Println("raven: Error while reading response body", res)
 	}
 
 	err = res.Body.Close()
 	if err != nil {
-		log.Println("Error while closing response body", err)
+		log.Println("raven: Error while closing response body", err)
 	}
 
 	if res.StatusCode != 200 {
@@ -1010,7 +1010,7 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 func serializedPacket(packet *Packet) (io.Reader, string, error) {
 	packetJSON, err := packet.JSON()
 	if err != nil {
-		return nil, "", fmt.Errorf("error marshaling packet %+v to JSON: %v", packet, err)
+		return nil, "", fmt.Errorf("raven: error marshaling packet %+v to JSON: %v", packet, err)
 	}
 
 	// Only deflate/base64 the packet if it is bigger than 1KB, as there is an overhead
@@ -1020,15 +1020,15 @@ func serializedPacket(packet *Packet) (io.Reader, string, error) {
 		deflate, _ := zlib.NewWriterLevel(b64, zlib.BestCompression)
 		_, err := deflate.Write(packetJSON)
 		if err != nil {
-			log.Println("Error while deflating data in packet serializer", err)
+			log.Println("raven: Error while deflating data in packet serializer", err)
 		}
 		err = deflate.Close()
 		if err != nil {
-			log.Println("Error while closing zlib deflate in packet serializer", err)
+			log.Println("raven: Error while closing zlib deflate in packet serializer", err)
 		}
 		err = b64.Close()
 		if err != nil {
-			log.Println("Error while closing b64 encoder in packet serializer", err)
+			log.Println("raven: Error while closing b64 encoder in packet serializer", err)
 		}
 		return buf, "application/octet-stream", nil
 	}
