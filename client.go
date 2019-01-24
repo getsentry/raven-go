@@ -894,7 +894,6 @@ func (client *Client) Release() string {
 // Release returns configured Release of default client
 func Release() string { return DefaultClient.Release() }
 
-
 // IncludePaths returns configured includePaths of given client
 func (client *Client) IncludePaths() []string {
 	client.mu.RLock()
@@ -946,13 +945,16 @@ func (client *Client) ClearContext() {
 }
 
 // SetUserContext updates User of Context interface on default client
-func SetUserContext(u *User)             { DefaultClient.SetUserContext(u) }
+func SetUserContext(u *User) { DefaultClient.SetUserContext(u) }
+
 // SetHttpContext updates Http of Context interface on default client
-func SetHttpContext(h *Http)             { DefaultClient.SetHttpContext(h) }
+func SetHttpContext(h *Http) { DefaultClient.SetHttpContext(h) }
+
 // SetTagsContext updates Tags of Context interface on default client
 func SetTagsContext(t map[string]string) { DefaultClient.SetTagsContext(t) }
+
 // ClearContext clears Context interface on default client by removing tags, user and request information
-func ClearContext()                      { DefaultClient.ClearContext() }
+func ClearContext() { DefaultClient.ClearContext() }
 
 // HTTPTransport is the default transport, delivering packets to Sentry via the
 // HTTP API.
