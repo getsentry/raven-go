@@ -54,6 +54,9 @@ const (
 	FATAL   = Severity("fatal")
 )
 
+// Logger used in all internal log calls which can be enabled with SetDebug(true) function call
+var debugLogger = log.New(ioutil.Discard, "", 0)
+
 // Timestamp holds the creation time of a Packet
 type Timestamp time.Time
 
@@ -355,7 +358,7 @@ func newTransport() Transport {
 	t := &HTTPTransport{}
 	rootCAs, err := gocertifi.CACerts()
 	if err != nil {
-		log.Println("raven: failed to load root TLS certificates:", err)
+		debugLogger.Println("failed to load root TLS certificates:", err)
 	} else {
 		t.Client = &http.Client{
 			Transport: &http.Transport{
@@ -378,7 +381,7 @@ func newClient(tags map[string]string) *Client {
 	err := client.SetDSN(os.Getenv("SENTRY_DSN"))
 
 	if err != nil {
-		log.Println("raven: incorrect DSN", err)
+		debugLogger.Println("incorrect DSN", err)
 	}
 
 	client.SetRelease(os.Getenv("SENTRY_RELEASE"))
@@ -550,6 +553,14 @@ func (client *Client) SetSampleRate(rate float32) error {
 	return nil
 }
 
+func (client *Client) SetDebug(debug bool) {
+	if debug == true {
+		debugLogger = log.New(os.Stdout, "raven: ", 0)
+	} else {
+		debugLogger = log.New(ioutil.Discard, "", 0)
+	}
+}
+
 // SetRelease sets the "release" tag on the default *Client
 func SetRelease(release string) { DefaultClient.SetRelease(release) }
 
@@ -563,6 +574,9 @@ func SetDefaultLoggerName(name string) {
 
 // SetSampleRate sets the "sample rate" on the degault *Client
 func SetSampleRate(rate float32) error { return DefaultClient.SetSampleRate(rate) }
+
+// SetDebug sets the "debug" config on the default *Client
+func SetDebug(debug bool) { DefaultClient.SetDebug(debug) }
 
 func (client *Client) worker() {
 	for outgoingPacket := range client.queue {
@@ -993,12 +1007,12 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	// Response body needs to be drained and closed in order for TCP connection to stay opened (via keep-alive) and reused
 	_, err = io.Copy(ioutil.Discard, res.Body)
 	if err != nil {
-		log.Println("raven: Error while reading response body", res)
+		debugLogger.Println("Error while reading response body", res)
 	}
 
 	err = res.Body.Close()
 	if err != nil {
-		log.Println("raven: Error while closing response body", err)
+		debugLogger.Println("Error while closing response body", err)
 	}
 
 	if res.StatusCode != 200 {
@@ -1020,15 +1034,15 @@ func serializedPacket(packet *Packet) (io.Reader, string, error) {
 		deflate, _ := zlib.NewWriterLevel(b64, zlib.BestCompression)
 		_, err := deflate.Write(packetJSON)
 		if err != nil {
-			log.Println("raven: Error while deflating data in packet serializer", err)
+			debugLogger.Println("Error while deflating data in packet serializer", err)
 		}
 		err = deflate.Close()
 		if err != nil {
-			log.Println("raven: Error while closing zlib deflate in packet serializer", err)
+			debugLogger.Println("Error while closing zlib deflate in packet serializer", err)
 		}
 		err = b64.Close()
 		if err != nil {
-			log.Println("raven: Error while closing b64 encoder in packet serializer", err)
+			debugLogger.Println("Error while closing b64 encoder in packet serializer", err)
 		}
 		return buf, "application/octet-stream", nil
 	}
