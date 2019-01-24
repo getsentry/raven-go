@@ -159,7 +159,13 @@ func TestFileContext(t *testing.T) {
 	if err != nil {
 		t.Fatal("failed to create temporary directory:", err)
 	}
-	defer os.RemoveAll(tempdir)
+
+	defer func() {
+		err := os.RemoveAll(tempdir)
+		if err != nil {
+			fmt.Println("failed to remove temporary directory:", err)
+		}
+	}()
 
 	okPath := filepath.Join(tempdir, "ok")
 	missingPath := filepath.Join(tempdir, "missing")

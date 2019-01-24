@@ -2,6 +2,7 @@ package raven
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -106,7 +107,11 @@ func TestPacketJSONNilInterface(t *testing.T) {
 
 func TestPacketInit(t *testing.T) {
 	packet := &Packet{Message: "a", Interfaces: []Interface{&testInterface{}}}
-	packet.Init("foo")
+	err := packet.Init("foo")
+
+	if err != nil {
+		fmt.Println("failed to initialize packet")
+	}
 
 	if packet.Project != "foo" {
 		t.Error("incorrect Project:", packet.Project)
@@ -133,7 +138,11 @@ func TestPacketInit(t *testing.T) {
 
 func TestSetDSN(t *testing.T) {
 	client := &Client{}
-	client.SetDSN("https://u:p@example.com/sentry/1")
+	err := client.SetDSN("https://u:p@example.com/sentry/1")
+
+	if err != nil {
+		fmt.Println("invalid DSN")
+	}
 
 	if client.url != "https://example.com/sentry/api/1/store/" {
 		t.Error("incorrect url:", client.url)

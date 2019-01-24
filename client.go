@@ -375,7 +375,12 @@ func newClient(tags map[string]string) *Client {
 		sampleRate: 1.0,
 		queue:      make(chan *outgoingPacket, MaxQueueBuffer),
 	}
-	client.SetDSN(os.Getenv("SENTRY_DSN"))
+	err := client.SetDSN(os.Getenv("SENTRY_DSN"))
+
+	if err != nil {
+		log.Println("raven: incorrect DSN", err)
+	}
+
 	client.SetRelease(os.Getenv("SENTRY_RELEASE"))
 	client.SetEnvironment(os.Getenv("SENTRY_ENVIRONMENT"))
 	return client
@@ -979,12 +984,23 @@ func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	req.Header.Set("X-Sentry-Auth", authHeader)
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", contentType)
+
 	res, err := t.Do(req)
 	if err != nil {
 		return err
 	}
-	io.Copy(ioutil.Discard, res.Body)
-	res.Body.Close()
+
+	// Response body needs to be drained and closed in order for TCP connection to stay opened (via keep-alive) and reused
+	_, err = io.Copy(ioutil.Discard, res.Body)
+	if err != nil {
+		log.Println("Error while reading response body", res)
+	}
+
+	err = res.Body.Close()
+	if err != nil {
+		log.Println("Error while closing response body", err)
+	}
+
 	if res.StatusCode != 200 {
 		return fmt.Errorf("raven: got http status %d - x-sentry-error: %s", res.StatusCode, res.Header.Get("X-Sentry-Error"))
 	}
@@ -997,15 +1013,23 @@ func serializedPacket(packet *Packet) (io.Reader, string, error) {
 		return nil, "", fmt.Errorf("error marshaling packet %+v to JSON: %v", packet, err)
 	}
 
-	// Only deflate/base64 the packet if it is bigger than 1KB, as there is
-	// overhead.
+	// Only deflate/base64 the packet if it is bigger than 1KB, as there is an overhead
 	if len(packetJSON) > 1000 {
 		buf := &bytes.Buffer{}
 		b64 := base64.NewEncoder(base64.StdEncoding, buf)
 		deflate, _ := zlib.NewWriterLevel(b64, zlib.BestCompression)
-		deflate.Write(packetJSON)
-		deflate.Close()
-		b64.Close()
+		_, err := deflate.Write(packetJSON)
+		if err != nil {
+			log.Println("Error while deflating data in packet serializer", err)
+		}
+		err = deflate.Close()
+		if err != nil {
+			log.Println("Error while closing zlib deflate in packet serializer", err)
+		}
+		err = b64.Close()
+		if err != nil {
+			log.Println("Error while closing b64 encoder in packet serializer", err)
+		}
 		return buf, "application/octet-stream", nil
 	}
 	return bytes.NewReader(packetJSON), "application/json", nil
