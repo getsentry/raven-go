@@ -15,14 +15,16 @@ import (
 	"sync"
 )
 
-// https://docs.getsentry.com/hosted/clientdev/interfaces/#failure-interfaces
+// Stacktrace defines Sentry's spec compliant interface holding Stacktrace information - https://docs.sentry.io/development/sdk-dev/interfaces/stacktrace/
 type Stacktrace struct {
 	// Required
 	Frames []*StacktraceFrame `json:"frames"`
 }
 
+// Class provides name of implemented Sentry's interface
 func (s *Stacktrace) Class() string { return "stacktrace" }
 
+// Culprit iterates through stacktrace frames and returns first in-app frame's information
 func (s *Stacktrace) Culprit() string {
 	for i := len(s.Frames) - 1; i >= 0; i-- {
 		frame := s.Frames[i]
@@ -33,6 +35,7 @@ func (s *Stacktrace) Culprit() string {
 	return ""
 }
 
+// StacktraceFrame defines Sentry's spec compliant interface holding Frame information - https://docs.sentry.io/development/sdk-dev/interfaces/stacktrace/
 type StacktraceFrame struct {
 	// At least one required
 	Filename string `json:"filename,omitempty"`
@@ -49,7 +52,7 @@ type StacktraceFrame struct {
 	InApp        bool     `json:"in_app"`
 }
 
-// Try to get stacktrace from err as an interface of github.com/pkg/errors, or else NewStacktrace()
+// GetOrNewStacktrace tries to get stacktrace from err as an interface of github.com/pkg/errors, or else NewStacktrace()
 func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []string) *Stacktrace {
 	type stackTracer interface {
 		StackTrace() []runtime.Frame
@@ -80,7 +83,7 @@ func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []s
 	return &Stacktrace{Frames: frames}
 }
 
-// Intialize and populate a new stacktrace, skipping skip frames.
+// NewStacktrace intializes and populates a new stacktrace, skipping skip frames.
 //
 // context is the number of surrounding lines that should be included for context.
 // Setting context to 3 would try to get seven lines. Setting context to -1 returns
@@ -128,7 +131,7 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 	return &Stacktrace{frames}
 }
 
-// Build a single frame using data returned from runtime.Caller.
+// NewStacktraceFrame builds a single frame using data returned from runtime.Caller.
 //
 // context is the number of surrounding lines that should be included for context.
 // Setting context to 3 would try to get seven lines. Setting context to -1 returns
@@ -137,23 +140,14 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 // appPackagePrefixes is a list of prefixes used to check whether a package should
 // be considered "in app".
 func NewStacktraceFrame(pc uintptr, fName, file string, line, context int, appPackagePrefixes []string) *StacktraceFrame {
-	frame := &StacktraceFrame{AbsolutePath: file, Filename: trimPath(file), Lineno: line, InApp: false}
+	frame := &StacktraceFrame{AbsolutePath: file, Filename: trimPath(file), Lineno: line}
 	frame.Module, frame.Function = functionName(fName)
+	frame.InApp = isInAppFrame(*frame, appPackagePrefixes)
 
 	// `runtime.goexit` is effectively a placeholder that comes from
 	// runtime/asm_amd64.s and is meaningless.
 	if frame.Module == "runtime" && frame.Function == "goexit" {
 		return nil
-	}
-
-	if frame.Module == "main" {
-		frame.InApp = true
-	} else {
-		for _, prefix := range appPackagePrefixes {
-			if strings.HasPrefix(frame.Module, prefix) && !strings.Contains(frame.Module, "vendor") && !strings.Contains(frame.Module, "third_party") {
-				frame.InApp = true
-			}
-		}
 	}
 
 	if context > 0 {
@@ -176,7 +170,21 @@ func NewStacktraceFrame(pc uintptr, fName, file string, line, context int, appPa
 			frame.ContextLine = string(contextLine[0])
 		}
 	}
+
 	return frame
+}
+
+// Determines whether frame should be marked as InApp
+func isInAppFrame(frame StacktraceFrame, appPackagePrefixes []string) bool {
+	if frame.Module == "main" {
+		return true
+	}
+  for _, prefix := range appPackagePrefixes {
+    if strings.HasPrefix(frame.Module, prefix) && !strings.Contains(frame.Module, "vendor") && !strings.Contains(frame.Module, "third_party") {
+      return true
+    }
+  }
+	return false
 }
 
 // Retrieve the name of the package and function containing the PC.
@@ -195,12 +203,14 @@ func functionName(fName string) (pack string, name string) {
 	return
 }
 
+// SourceCodeLoader allows to read source code files from the current fs
 type SourceCodeLoader interface {
 	Load(filename string, line, context int) ([][]byte, int)
 }
 
 var sourceCodeLoader SourceCodeLoader = &fsLoader{cache: make(map[string][][]byte)}
 
+// SetSourceCodeLoader overrides currently used loader for the new one
 func SetSourceCodeLoader(loader SourceCodeLoader) {
 	sourceCodeLoader = loader
 }

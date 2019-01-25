@@ -11,6 +11,12 @@ import (
 	"testing"
 )
 
+// a
+func trace() *Stacktrace {
+	return NewStacktrace(0, 2, []string{thisPackage})
+	// b
+}
+
 func init() {
 	thisFile, thisPackage = derivePackage()
 	functionNameTests = []FunctionNameTest{
@@ -55,8 +61,14 @@ func TestStacktrace(t *testing.T) {
 	if len(st.Frames) == 0 {
 		t.Error("got zero frames")
 	}
+}
 
+func TestStacktraceFrame(t *testing.T) {
+	st := trace()
 	f := st.Frames[len(st.Frames)-1]
+	_, filename, _, _ := runtime.Caller(0)
+	runningInVendored := strings.Contains(filename, "vendor")
+
 	if f.Filename != thisFile {
 		t.Errorf("incorrect Filename; got %s, want %s", f.Filename, thisFile)
 	}
@@ -69,9 +81,20 @@ func TestStacktrace(t *testing.T) {
 	if f.Module != thisPackage {
 		t.Error("incorrect Module:", f.Module)
 	}
-	if f.Lineno != 97 {
+	if f.Lineno != 16 {
 		t.Error("incorrect Lineno:", f.Lineno)
 	}
+	if f.InApp != !runningInVendored {
+		t.Error("expected InApp to be true")
+	}
+	if f.InApp && st.Culprit() != fmt.Sprintf("%s.trace", thisPackage) {
+		t.Error("incorrect Culprit:", st.Culprit())
+	}
+}
+
+func TestStacktraceContext(t *testing.T) {
+	st := trace()
+	f := st.Frames[len(st.Frames)-1]
 	if f.ContextLine != "\treturn NewStacktrace(0, 2, []string{thisPackage})" {
 		t.Errorf("incorrect ContextLine: %#v", f.ContextLine)
 	}
@@ -81,21 +104,6 @@ func TestStacktrace(t *testing.T) {
 	if len(f.PostContext) != 2 || f.PostContext[0] != "\t// b" || f.PostContext[1] != "}" {
 		t.Errorf("incorrect PostContext %#v", f.PostContext)
 	}
-	_, filename, _, _ := runtime.Caller(0)
-	runningInVendored := strings.Contains(filename, "vendor")
-	if f.InApp != !runningInVendored {
-		t.Error("expected InApp to be true")
-	}
-
-	if f.InApp && st.Culprit() != fmt.Sprintf("%s.trace", thisPackage) {
-		t.Error("incorrect Culprit:", st.Culprit())
-	}
-}
-
-// a
-func trace() *Stacktrace {
-	return NewStacktrace(0, 2, []string{thisPackage})
-	// b
 }
 
 func derivePackage() (file, pack string) {
@@ -151,7 +159,13 @@ func TestFileContext(t *testing.T) {
 	if err != nil {
 		t.Fatal("failed to create temporary directory:", err)
 	}
-	defer os.RemoveAll(tempdir)
+
+	defer func() {
+		err := os.RemoveAll(tempdir)
+		if err != nil {
+			fmt.Println("failed to remove temporary directory:", err)
+		}
+	}()
 
 	okPath := filepath.Join(tempdir, "ok")
 	missingPath := filepath.Join(tempdir, "missing")
