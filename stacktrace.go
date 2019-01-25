@@ -13,8 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-
-	"github.com/pkg/errors"
 )
 
 // Stacktrace defines Sentry's spec compliant interface holding Stacktrace information - https://docs.sentry.io/development/sdk-dev/interfaces/stacktrace/
@@ -56,32 +54,33 @@ type StacktraceFrame struct {
 
 // GetOrNewStacktrace tries to get stacktrace from err as an interface of github.com/pkg/errors, or else NewStacktrace()
 func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []string) *Stacktrace {
-	stacktracer, errHasStacktrace := err.(interface {
-		StackTrace() errors.StackTrace
-	})
-	if errHasStacktrace {
-		var frames []*StacktraceFrame
-		for f := range stacktracer.StackTrace() {
-			pc := uintptr(f) - 1
-			fn := runtime.FuncForPC(pc)
-			var fName string
-			var file string
-			var line int
-			if fn != nil {
-				file, line = fn.FileLine(pc)
-				fName = fn.Name()
-			} else {
-				file = "unknown"
-				fName = "unknown"
-			}
-			frame := NewStacktraceFrame(pc, fName, file, line, context, appPackagePrefixes)
-			if frame != nil {
-				frames = append([]*StacktraceFrame{frame}, frames...)
-			}
-		}
-		return &Stacktrace{Frames: frames}
+	type stackTracer interface {
+		StackTrace() []runtime.Frame
 	}
-  return NewStacktrace(skip+1, context, appPackagePrefixes)
+	stacktrace, ok := err.(stackTracer)
+	if !ok {
+		return NewStacktrace(skip+1, context, appPackagePrefixes)
+	}
+	var frames []*StacktraceFrame
+	for f := range stacktrace.StackTrace() {
+		pc := uintptr(f) - 1
+		fn := runtime.FuncForPC(pc)
+		var fName string
+		var file string
+		var line int
+		if fn != nil {
+			file, line = fn.FileLine(pc)
+			fName = fn.Name()
+		} else {
+			file = "unknown"
+			fName = "unknown"
+		}
+		frame := NewStacktraceFrame(pc, fName, file, line, context, appPackagePrefixes)
+		if frame != nil {
+			frames = append([]*StacktraceFrame{frame}, frames...)
+		}
+	}
+	return &Stacktrace{Frames: frames}
 }
 
 // NewStacktrace intializes and populates a new stacktrace, skipping skip frames.

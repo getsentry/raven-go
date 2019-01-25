@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/certifi/gocertifi"
-	pkgErrors "github.com/pkg/errors"
 )
 
 const (
@@ -743,7 +742,7 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 	}
 
 	extra := extractExtra(err)
-	cause := pkgErrors.Cause(err)
+	cause := Cause(err)
 
 	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1, 3, client.includePaths)))...)
 	eventID, _ := client.Capture(packet, tags)
@@ -768,7 +767,7 @@ func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, int
 	}
 
 	extra := extractExtra(err)
-	cause := pkgErrors.Cause(err)
+	cause := Cause(err)
 
 	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1, 3, client.includePaths)))...)
 	eventID, ch := client.Capture(packet, tags)
@@ -1053,4 +1052,30 @@ var hostname string
 
 func init() {
 	hostname, _ = os.Hostname()
+}
+
+// Cause returns the underlying cause of the error, if possible.
+// An error value has a cause if it implements the following
+// interface:
+//
+//     type causer interface {
+//            Cause() error
+//     }
+//
+// If the error does not implement Cause, the original error will
+// be returned. If the error is nil, nil will be returned without further
+// investigation.
+func Cause(err error) error {
+	type causer interface {
+		Cause() error
+	}
+
+	for err != nil {
+		cause, ok := err.(causer)
+		if !ok {
+			break
+		}
+		err = cause.Cause()
+	}
+	return err
 }
