@@ -822,7 +822,7 @@ func CapturePanic(f func(), tags map[string]string, interfaces ...Interface) (in
 	return DefaultClient.CapturePanic(f, tags, interfaces...)
 }
 
-// CapturePanicAndWait is identical to CaptureError, except it blocks and assures that the event was sent
+// CapturePanicAndWait is identical to CapturePanic, except it blocks and assures that the event was sent
 func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
 	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
 	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
@@ -858,7 +858,7 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 	return
 }
 
-// CapturePanicAndWait is identical to CaptureError, except it blocks and assures that the event was sent
+// CapturePanicAndWait is identical to CapturePanic, except it blocks and assures that the event was sent
 func CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (interface{}, string) {
 	return DefaultClient.CapturePanicAndWait(f, tags, interfaces...)
 }
