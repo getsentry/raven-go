@@ -29,11 +29,16 @@ func WrapWithExtra(err error, extraInfo map[string]interface{}) error {
 	}
 }
 
+// errWithJustExtra is a regular error with just the user-provided extras added but without a cause
+type errWithJustExtra interface {
+	error
+	ExtraInfo() Extra
+}
+
 // ErrWithExtra links Error with attached user-provided extras that will be reported alongside the Error
 type ErrWithExtra interface {
-	Error() string
+	errWithJustExtra
 	Cause() error
-	ExtraInfo() Extra
 }
 
 // Iteratively fetches all the Extra data added to an error,
@@ -44,7 +49,7 @@ func extractExtra(err error) Extra {
 
 	currentErr := err
 	for currentErr != nil {
-		if errWithExtra, ok := currentErr.(ErrWithExtra); ok {
+		if errWithExtra, ok := currentErr.(errWithJustExtra); ok {
 			for k, v := range errWithExtra.ExtraInfo() {
 				extra[k] = v
 			}
