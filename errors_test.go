@@ -140,3 +140,19 @@ func TestExtractErrorPullsExtraData(t *testing.T) {
 		}
 	}
 }
+
+type errorWithJustExtra struct{}
+
+func (e *errorWithJustExtra) Error() string {
+	return "oops"
+}
+func (e *errorWithJustExtra) ExtraInfo() Extra {
+	return Extra{"foo": "bar"}
+}
+
+func TestExtractExtraDoesNotRequireCause(t *testing.T) {
+	extra := extractExtra(&errorWithJustExtra{})
+	if extra["foo"] != "bar" {
+		t.Error("Could not extract extra without cause")
+	}
+}
