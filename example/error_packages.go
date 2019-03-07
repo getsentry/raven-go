@@ -1,3 +1,5 @@
+// +build errors_packages
+
 package main
 
 import (
