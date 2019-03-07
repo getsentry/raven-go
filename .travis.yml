@@ -6,6 +6,7 @@ go:
   - 1.9.x
   - 1.10.x
   - 1.11.x
+  - 1.12.x
   - tip
 
 before_install:
@@ -36,6 +37,9 @@ matrix:
       script: ./scripts/lint.sh
     - name: "golint 1.11.x"
       go: 1.11.x
+      script: ./scripts/lint.sh
+    - name: "golint 1.12.x"
+      go: 1.12.x
       script: ./scripts/lint.sh
   allow_failures:
     - go: tip

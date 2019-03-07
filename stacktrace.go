@@ -10,6 +10,7 @@ import (
 	"go/build"
 	"io/ioutil"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -52,35 +53,63 @@ type StacktraceFrame struct {
 	InApp        bool     `json:"in_app"`
 }
 
-// GetOrNewStacktrace tries to get stacktrace from err as an interface of github.com/pkg/errors, or else NewStacktrace()
-func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []string) *Stacktrace {
-	type stackTracer interface {
-		StackTrace() []runtime.Frame
-	}
-	stacktrace, ok := err.(stackTracer)
-	if !ok {
-		return NewStacktrace(skip+1, context, appPackagePrefixes)
-	}
+// extractFramesFromPcs translates slice of stack trace pointers into usable frames
+func extractFramesFromPcs(pcs []uintptr, context int, appPackagePrefixes []string) []*StacktraceFrame {
 	var frames []*StacktraceFrame
-	for f := range stacktrace.StackTrace() {
-		pc := uintptr(f) - 1
-		fn := runtime.FuncForPC(pc)
-		var fName string
-		var file string
-		var line int
-		if fn != nil {
-			file, line = fn.FileLine(pc)
-			fName = fn.Name()
-		} else {
-			file = "unknown"
-			fName = "unknown"
-		}
-		frame := NewStacktraceFrame(pc, fName, file, line, context, appPackagePrefixes)
+	callersFrames := runtime.CallersFrames(pcs)
+
+	for {
+		fr, more := callersFrames.Next()
+		frame := NewStacktraceFrame(fr.PC, fr.Function, fr.File, fr.Line, context, appPackagePrefixes)
 		if frame != nil {
 			frames = append([]*StacktraceFrame{frame}, frames...)
 		}
+		if !more {
+			break
+		}
 	}
-	return &Stacktrace{Frames: frames}
+
+	return frames
+}
+
+// GetOrNewStacktrace tries to get stacktrace from err as an interface of github.com/pkg/errors, or else NewStacktrace()
+// Use of reflection allows us to not have a hard dependency on any given package, so we don't have to import it
+func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []string) *Stacktrace {
+	// https://github.com/pkg/errors
+	// https://github.com/pingcap/errors
+	methodStackTrace := reflect.ValueOf(err).MethodByName("StackTrace")
+	// https://github.com/go-errors/errors
+	methodStackFrames := reflect.ValueOf(err).MethodByName("StackFrames")
+
+	if methodStackTrace.IsValid() {
+		stacktrace := methodStackTrace.Call(make([]reflect.Value, 0))[0]
+		if stacktrace.Kind() != reflect.Slice {
+			return NewStacktrace(skip+1, context, appPackagePrefixes)
+		}
+
+		pcs := make([]uintptr, stacktrace.Len())
+		for i := 0; i < stacktrace.Len(); i++ {
+			pcs = append(pcs, uintptr(stacktrace.Index(i).Uint()))
+		}
+		frames := extractFramesFromPcs(pcs, context, appPackagePrefixes)
+
+		return &Stacktrace{frames}
+	} else if methodStackFrames.IsValid() {
+		stacktrace := methodStackFrames.Call(make([]reflect.Value, 0))[0]
+		if stacktrace.Kind() != reflect.Slice {
+			return NewStacktrace(skip+1, context, appPackagePrefixes)
+		}
+
+		pcs := make([]uintptr, stacktrace.Len())
+		for i := 0; i < stacktrace.Len(); i++ {
+			pcs = append(pcs, uintptr(stacktrace.Index(i).FieldByName("ProgramCounter").Uint()))
+		}
+		frames := extractFramesFromPcs(pcs, context, appPackagePrefixes)
+
+		return &Stacktrace{frames}
+	}
+
+	return NewStacktrace(skip+1, context, appPackagePrefixes)
 }
 
 // NewStacktrace intializes and populates a new stacktrace, skipping skip frames.
@@ -92,8 +121,6 @@ func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []s
 // appPackagePrefixes is a list of prefixes used to check whether a package should
 // be considered "in app".
 func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktrace {
-	var frames []*StacktraceFrame
-
 	callerPcs := make([]uintptr, 100)
 	numCallers := runtime.Callers(skip+2, callerPcs)
 
@@ -102,32 +129,18 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 		return nil
 	}
 
-	callersFrames := runtime.CallersFrames(callerPcs)
+	frames := extractFramesFromPcs(callerPcs, context, appPackagePrefixes)
 
-	for {
-		fr, more := callersFrames.Next()
-		if fr.Func != nil {
-			frame := NewStacktraceFrame(fr.PC, fr.Function, fr.File, fr.Line, context, appPackagePrefixes)
-			if frame != nil {
-				frames = append(frames, frame)
-			}
-		}
-		if !more {
-			break
-		}
-	}
 	// If there are no frames, the entire stacktrace is nil
 	if len(frames) == 0 {
 		return nil
 	}
+
 	// Optimize the path where there's only 1 frame
 	if len(frames) == 1 {
 		return &Stacktrace{frames}
 	}
-	// Sentry wants the frames with the oldest first, so reverse them
-	for i, j := 0, len(frames)-1; i < j; i, j = i+1, j-1 {
-		frames[i], frames[j] = frames[j], frames[i]
-	}
+
 	return &Stacktrace{frames}
 }
 
@@ -140,6 +153,14 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 // appPackagePrefixes is a list of prefixes used to check whether a package should
 // be considered "in app".
 func NewStacktraceFrame(pc uintptr, fName, file string, line, context int, appPackagePrefixes []string) *StacktraceFrame {
+	if file == "" {
+		file = "unknown"
+	}
+
+	if fName == "" {
+		fName = "unknown"
+	}
+
 	frame := &StacktraceFrame{AbsolutePath: file, Filename: trimPath(file), Lineno: line}
 	frame.Module, frame.Function = functionName(fName)
 	frame.InApp = isInAppFrame(*frame, appPackagePrefixes)
@@ -147,6 +168,11 @@ func NewStacktraceFrame(pc uintptr, fName, file string, line, context int, appPa
 	// `runtime.goexit` is effectively a placeholder that comes from
 	// runtime/asm_amd64.s and is meaningless.
 	if frame.Module == "runtime" && frame.Function == "goexit" {
+		return nil
+	}
+
+	// Skip useless frames
+	if frame.Filename == "unknown" && frame.Function == "unknown" && frame.Lineno == 0 && frame.Colno == 0 {
 		return nil
 	}
 
@@ -179,11 +205,11 @@ func isInAppFrame(frame StacktraceFrame, appPackagePrefixes []string) bool {
 	if frame.Module == "main" {
 		return true
 	}
-  for _, prefix := range appPackagePrefixes {
-    if strings.HasPrefix(frame.Module, prefix) && !strings.Contains(frame.Module, "vendor") && !strings.Contains(frame.Module, "third_party") {
-      return true
-    }
-  }
+	for _, prefix := range appPackagePrefixes {
+		if strings.HasPrefix(frame.Module, prefix) && !strings.Contains(frame.Module, "vendor") && !strings.Contains(frame.Module, "third_party") {
+			return true
+		}
+	}
 	return false
 }
 
