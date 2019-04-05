@@ -106,11 +106,9 @@ func NewStacktrace(skip int, context int, appPackagePrefixes []string) *Stacktra
 
 	for {
 		fr, more := callersFrames.Next()
-		if fr.Func != nil {
-			frame := NewStacktraceFrame(fr.PC, fr.Function, fr.File, fr.Line, context, appPackagePrefixes)
-			if frame != nil {
-				frames = append(frames, frame)
-			}
+		frame := NewStacktraceFrame(fr.PC, fr.Function, fr.File, fr.Line, context, appPackagePrefixes)
+		if frame != nil {
+			frames = append(frames, frame)
 		}
 		if !more {
 			break
