@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	userAgent       = "raven-go/1.0"
-	timestampFormat = `"2006-01-02T15:04:05.00"`
+	userAgent              = "raven-go/1.0"
+	timestampFormat        = `"2006-01-02T15:04:05.00"`
+	transportClientTimeout = 30 * time.Second
 )
 
 // Internal SDK Error types
@@ -364,6 +365,7 @@ func newTransport() Transport {
 				Proxy:           http.ProxyFromEnvironment,
 				TLSClientConfig: &tls.Config{RootCAs: rootCAs},
 			},
+			Timeout: transportClientTimeout,
 		}
 	}
 	return t
