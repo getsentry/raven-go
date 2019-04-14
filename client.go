@@ -6,6 +6,7 @@ import (
 	"compress/zlib"
 	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -28,9 +29,22 @@ import (
 )
 
 const (
-	userAgent              = "raven-go/1.0"
-	timestampFormat        = `"2006-01-02T15:04:05.00"`
-	transportClientTimeout = 30 * time.Second
+	userAgent       = "raven-go/1.0"
+	timestampFormat = `"2006-01-02T15:04:05.00"`
+)
+
+// client connection parameters
+var (
+	clientTimeout = 30 * time.Second
+)
+
+// transports connetion parameters. it is default values.
+// more info into docs https://golang.org/pkg/net/http/
+var (
+	transportTLSHandshakeTimeout   = 10 * time.Second
+	transportResponseHeaderTimeout = 10 * time.Second
+	transportExpectContinueTimeout = 1 * time.Second
+	transportIdleConnTimeout       = 30 * time.Second
 )
 
 // Internal SDK Error types
@@ -354,26 +368,9 @@ func (c *context) interfaces() []Interface {
 // Packets will be dropped if the buffer is full. Used by NewClient.
 var MaxQueueBuffer = 100
 
-func newTransport() Transport {
-	t := &HTTPTransport{}
-	rootCAs, err := gocertifi.CACerts()
-	if err != nil {
-		debugLogger.Println("failed to load root TLS certificates:", err)
-	} else {
-		t.Client = &http.Client{
-			Transport: &http.Transport{
-				Proxy:           http.ProxyFromEnvironment,
-				TLSClientConfig: &tls.Config{RootCAs: rootCAs},
-			},
-			Timeout: transportClientTimeout,
-		}
-	}
-	return t
-}
-
 func newClient(tags map[string]string) *Client {
 	client := &Client{
-		Transport:  newTransport(),
+		Transport:  NewHTTPTransport(nil),
 		Tags:       tags,
 		context:    &context{},
 		sampleRate: 1.0,
@@ -561,6 +558,16 @@ func (client *Client) SetDebug(debug bool) {
 		debugLogger = log.New(ioutil.Discard, "", 0)
 	}
 }
+
+// SetTransport sets the client's Transport
+func (client *Client) SetTransport(t Transport) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.Transport = t
+}
+
+// SetTransport sets the Transport on the default *Client
+func SetTransport(t Transport) { DefaultClient.SetTransport(t) }
 
 // SetRelease sets the "release" tag on the default *Client
 func SetRelease(release string) { DefaultClient.SetRelease(release) }
@@ -982,7 +989,84 @@ type HTTPTransport struct {
 	*http.Client
 }
 
-// Send uses HTTPTransport to send a Packet to configured Sentry's DSN endpoint
+// HTTPTransportOptions are options to configure the HTTPTransport
+type HTTPTransportOptions struct {
+	InsecureSkipVerify bool
+	RootCAs            *x509.CertPool
+}
+
+func NewHTTPTransport(o *HTTPTransportOptions) *HTTPTransport {
+	if o == nil {
+		o = &HTTPTransportOptions{}
+	}
+	if o.RootCAs == nil {
+		// This can't actually error, so there's no point.
+		rootCAs, _ := gocertifi.CACerts()
+		o.RootCAs = rootCAs
+	}
+	return &HTTPTransport{
+		Client: &http.Client{
+			Transport: &http.Transport{
+				Proxy:                 http.ProxyFromEnvironment,
+				IdleConnTimeout:       transportIdleConnTimeout,
+				TLSHandshakeTimeout:   transportTLSHandshakeTimeout,
+				ResponseHeaderTimeout: transportResponseHeaderTimeout,
+				ExpectContinueTimeout: transportExpectContinueTimeout,
+				TLSClientConfig: &tls.Config{
+					RootCAs:            o.RootCAs,
+					InsecureSkipVerify: o.InsecureSkipVerify,
+				},
+			},
+			Timeout: clientTimeout,
+		},
+	}
+}
+
+// SetClientTimeout sets the client timeout
+func SetClientTimeout(newClientTimeout int) error {
+	if newClientTimeout == 0 {
+		return nil
+	}
+	clientTimeout = time.Duration(newClientTimeout) * time.Second
+	return nil
+}
+
+// SetIdleConnTimeout sets the tranport config of Idle connention timeout
+func SetIdleConnTimeout(newIdleConnTimeout int) error {
+	if newIdleConnTimeout == 0 {
+		return nil
+	}
+	transportIdleConnTimeout = time.Duration(newIdleConnTimeout) * time.Second
+	return nil
+}
+
+// SetTLSHandshakeTimeout sets the tranport config of TLS handshake timeout
+func SetTLSHandshakeTimeout(newTLSHandshakeTimeout int) error {
+	if newTLSHandshakeTimeout == 0 {
+		return nil
+	}
+	transportTLSHandshakeTimeout = time.Duration(newTLSHandshakeTimeout) * time.Second
+	return nil
+}
+
+// SetResponseHeaderTimeout sets the transport config of response header timeout
+func SetResponseHeaderTimeout(newResponseHeaderTimeout int) error {
+	if newResponseHeaderTimeout == 0 {
+		return nil
+	}
+	transportResponseHeaderTimeout = time.Duration(newResponseHeaderTimeout) * time.Second
+	return nil
+}
+
+// SetExpectContinueTimeout sets the transport config of expect continue timeout
+func SetExpectContinueTimeout(newExpectContinueTimeout int) error {
+	if newExpectContinueTimeout == 0 {
+		return nil
+	}
+	transportExpectContinueTimeout = time.Duration(newExpectContinueTimeout) * time.Second
+	return nil
+}
+
 func (t *HTTPTransport) Send(url, authHeader string, packet *Packet) error {
 	if url == "" {
 		return nil
