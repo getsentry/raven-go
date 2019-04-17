@@ -10,6 +10,10 @@ type errWrappedWithExtra struct {
 }
 
 func (ewx *errWrappedWithExtra) Error() string {
+	if ewx.err == nil {
+		return ""
+	}
+
 	return ewx.err.Error()
 }
 
