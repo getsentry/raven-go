@@ -156,3 +156,10 @@ func TestExtractExtraDoesNotRequireCause(t *testing.T) {
 		t.Error("Could not extract extra without cause")
 	}
 }
+
+func TestErrWrappedWithExtraWithNilError(t *testing.T) {
+	ewx := WrapWithExtra(nil, map[string]interface{}{})
+	if errString := ewx.Error(); errString != "" {
+		t.Errorf("Expected empty string got %s", errString)
+	}
+}
