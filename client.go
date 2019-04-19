@@ -354,6 +354,10 @@ func (c *context) interfaces() []Interface {
 // Packets will be dropped if the buffer is full. Used by NewClient.
 var MaxQueueBuffer = 100
 
+func SetMaxQueueBuffer(maxCount int) {
+	MaxQueueBuffer = maxCount
+}
+
 func newTransport() Transport {
 	t := &HTTPTransport{}
 	rootCAs, err := gocertifi.CACerts()
