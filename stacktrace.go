@@ -62,8 +62,8 @@ func GetOrNewStacktrace(err error, skip int, context int, appPackagePrefixes []s
 		return NewStacktrace(skip+1, context, appPackagePrefixes)
 	}
 	var frames []*StacktraceFrame
-	for f := range stacktrace.StackTrace() {
-		pc := uintptr(f) - 1
+	for _, f := range stacktrace.StackTrace() {
+		pc := uintptr(f.PC) - 1
 		fn := runtime.FuncForPC(pc)
 		var fName string
 		var file string
