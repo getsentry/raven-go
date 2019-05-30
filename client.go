@@ -643,6 +643,11 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 		packet.Logger = defaultLoggerName
 	}
 
+	// Set Severity if value is provided
+	if Severity(captureTags["level"]) != "" {
+		packet.Level = Severity(captureTags["level"])
+	}
+
 	err := packet.Init(projectID)
 	if err != nil {
 		ch <- err
