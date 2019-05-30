@@ -219,12 +219,6 @@ func setExtraDefaults(extra Extra) Extra {
 	return extra
 }
 
-func setPacketLevel (packet *Packet, level string) {
-	if Severity(level) != "" {
-		packet.Level = Severity(level)
-	}
-}
-
 // Init initializes required fields in a packet. It is typically called by
 // Client.Send/Report automatically.
 func (packet *Packet) Init(project string) error {
@@ -649,6 +643,11 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 		packet.Logger = defaultLoggerName
 	}
 
+	// Set Severity if value is provided
+	if Severity(captureTags["level"]) != "" {
+		packet.Level = Severity(captureTags["level"])
+	}
+
 	err := packet.Init(projectID)
 	if err != nil {
 		ch <- err
@@ -704,8 +703,6 @@ func (client *Client) CaptureMessage(message string, tags map[string]string, int
 	}
 
 	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
-	setPacketLevel(packet, tags["level"])
-
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -727,8 +724,6 @@ func (client *Client) CaptureMessageAndWait(message string, tags map[string]stri
 	}
 
 	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
-	setPacketLevel(packet, tags["level"])
-
 	eventID, ch := client.Capture(packet, tags)
 	if eventID != "" {
 		<-ch
@@ -761,8 +756,6 @@ func (client *Client) CaptureError(err error, tags map[string]string, interfaces
 	cause := Cause(err)
 
 	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1, 3, client.includePaths)))...)
-	setPacketLevel(packet, tags["level"])
-
 	eventID, _ := client.Capture(packet, tags)
 
 	return eventID
@@ -788,8 +781,6 @@ func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, int
 	cause := Cause(err)
 
 	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1, 3, client.includePaths)))...)
-	setPacketLevel(packet, tags["level"])
-
 	eventID, ch := client.Capture(packet, tags)
 	if eventID != "" {
 		<-ch
@@ -821,14 +812,12 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 				return
 			}
 			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
-			setPacketLevel(packet, tags["level"])
 		default:
 			rvalStr := fmt.Sprint(rval)
 			if client.shouldExcludeErr(rvalStr) {
 				return
 			}
 			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
-			setPacketLevel(packet, tags["level"])
 		}
 
 		errorID, _ = client.Capture(packet, tags)
@@ -861,14 +850,12 @@ func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, inte
 				return
 			}
 			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
-			setPacketLevel(packet, tags["level"])
 		default:
 			rvalStr := fmt.Sprint(rval)
 			if client.shouldExcludeErr(rvalStr) {
 				return
 			}
 			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
-			setPacketLevel(packet, tags["level"])
 		}
 
 		var ch chan error
