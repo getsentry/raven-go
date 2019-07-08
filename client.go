@@ -595,10 +595,7 @@ func (client *Client) worker() {
 	}
 }
 
-// Capture asynchronously delivers a packet to the Sentry server. It is a no-op
-// when client is nil. A channel is provided if it is important to check for a
-// send's success.
-func (client *Client) Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
+func (client *Client) doCapture(packet *Packet, captureTags map[string]string, fingerprint []string) (eventID string, ch chan error) {
 	ch = make(chan error, 1)
 
 	if client == nil {
@@ -628,6 +625,9 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	// Merge capture tags and client tags
 	packet.AddTags(captureTags)
 	packet.AddTags(client.Tags)
+
+	// Set specified fingerprint
+	packet.Fingerprint = fingerprint
 
 	// Initialize any required packet fields
 	client.mu.RLock()
@@ -685,6 +685,13 @@ func (client *Client) Capture(packet *Packet, captureTags map[string]string) (ev
 	return packet.EventID, ch
 }
 
+// Capture asynchronously delivers a packet to the Sentry server. It is a no-op
+// when client is nil. A channel is provided if it is important to check for a
+// send's success.
+func (client *Client) Capture(packet *Packet, captureTags map[string]string) (eventID string, ch chan error) {
+	return client.doCapture(packet, captureTags, []string{})
+}
+
 // Capture asynchronously delivers a packet to the Sentry server with the default *Client.
 // It is a no-op when client is nil. A channel is provided if it is important to check for a
 // send's success.
@@ -692,19 +699,33 @@ func Capture(packet *Packet, captureTags map[string]string) (eventID string, ch 
 	return DefaultClient.Capture(packet, captureTags)
 }
 
-// CaptureMessage formats and delivers a string message to the Sentry server.
-func (client *Client) CaptureMessage(message string, tags map[string]string, interfaces ...Interface) string {
+// CaptureWithFingerprint is identical to Capture except it includes specified fingerprint in the packet.
+func (client *Client) CaptureWithFingerprint(packet *Packet, captureTags map[string]string, fingerprint []string) (eventID string, ch chan error) {
+	return client.doCapture(packet, captureTags, fingerprint)
+}
+
+// CaptureWithFingerprint is identical to Capture except it includes specified fingerprint in the packet.
+func CaptureWithFingerprint(packet *Packet, captureTags map[string]string, fingerprint []string) (eventID string, ch chan error) {
+	return DefaultClient.CaptureWithFingerprint(packet, captureTags, fingerprint)
+}
+
+func (client *Client) doCaptureMessage(message string, tags map[string]string, fingerprint []string, interfaces ...Interface) (eventID string, ch chan error) {
 	if client == nil {
-		return ""
+		return "", nil
 	}
 
 	if client.shouldExcludeErr(message) {
-		return ""
+		return "", nil
 	}
 
 	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
-	eventID, _ := client.Capture(packet, tags)
 
+	return client.CaptureWithFingerprint(packet, tags, fingerprint)
+}
+
+// CaptureMessage formats and delivers a string message to the Sentry server.
+func (client *Client) CaptureMessage(message string, tags map[string]string, interfaces ...Interface) string {
+	eventID, _ := client.doCaptureMessage(message, tags, []string{}, interfaces...)
 	return eventID
 }
 
@@ -713,18 +734,19 @@ func CaptureMessage(message string, tags map[string]string, interfaces ...Interf
 	return DefaultClient.CaptureMessage(message, tags, interfaces...)
 }
 
-// CaptureMessageAndWait is identical to CaptureMessage except it blocks and waits for the message to be sent.
+// CaptureMessageWithFingerprint is identical to CaptureMessage except it includes specified fingerprint in the packet.
+func (client *Client) CaptureMessageWithFingerprint(message string, tags map[string]string, fingerprint []string, interfaces ...Interface) string {
+	eventID, _ := client.doCaptureMessage(message, tags, fingerprint, interfaces...)
+	return eventID
+}
+
+func CaptureMessageWithFingerprint(message string, tags map[string]string, fingerprint []string, interfaces ...Interface) string {
+	return DefaultClient.CaptureMessageWithFingerprint(message, tags, fingerprint, interfaces...)
+}
+
+// CaptureMessageAndWait is identical to CaptureMessage except it includes specified fingerprint in the packet.
 func (client *Client) CaptureMessageAndWait(message string, tags map[string]string, interfaces ...Interface) string {
-	if client == nil {
-		return ""
-	}
-
-	if client.shouldExcludeErr(message) {
-		return ""
-	}
-
-	packet := NewPacket(message, append(append(interfaces, client.context.interfaces()...), &Message{message, nil})...)
-	eventID, ch := client.Capture(packet, tags)
+	eventID, ch := client.doCaptureMessage(message, tags, []string{}, interfaces...)
 	if eventID != "" {
 		<-ch
 	}
@@ -737,27 +759,45 @@ func CaptureMessageAndWait(message string, tags map[string]string, interfaces ..
 	return DefaultClient.CaptureMessageAndWait(message, tags, interfaces...)
 }
 
-// CaptureError formats and delivers an error to the Sentry server.
-// Adds a stacktrace to the packet, excluding the call to this method.
-func (client *Client) CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
+// CaptureMessageWithFingerprintAndWait is identical to CaptureMessageAndWait except it includes specified fingerprint in the packet.
+func (client *Client) CaptureMessageWithFingerprintAndWait(message string, tags map[string]string, fingerprint []string, interfaces ...Interface) string {
+	eventID, ch := client.doCaptureMessage(message, tags, fingerprint, interfaces...)
+	if eventID != "" {
+		<-ch
+	}
+
+	return eventID
+}
+
+// CaptureMessageWithFingerprintAndWait is identical to CaptureMessageAndWait except it includes specified fingerprint in the packet.
+func CaptureMessageWithFingerprintAndWait(message string, tags map[string]string, fingerprint []string, interfaces ...Interface) string {
+	return DefaultClient.CaptureMessageWithFingerprintAndWait(message, tags, fingerprint, interfaces...)
+}
+
+func (client *Client) doCaptureError(err error, tags map[string]string, fingerprint []string, interfaces ...Interface) (string, chan error) {
 	if client == nil {
-		return ""
+		return "", nil
 	}
 
 	if err == nil {
-		return ""
+		return "", nil
 	}
 
 	if client.shouldExcludeErr(err.Error()) {
-		return ""
+		return "", nil
 	}
 
 	extra := extractExtra(err)
 	cause := Cause(err)
 
 	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1, 3, client.includePaths)))...)
-	eventID, _ := client.Capture(packet, tags)
+	return client.CaptureWithFingerprint(packet, tags, fingerprint)
+}
 
+// CaptureError formats and delivers an error to the Sentry server.
+// Adds a stacktrace to the packet, excluding the call to this method.
+func (client *Client) CaptureError(err error, tags map[string]string, interfaces ...Interface) string {
+	eventID, _ := client.doCaptureError(err, tags, []string{}, interfaces...)
 	return eventID
 }
 
@@ -767,21 +807,20 @@ func CaptureError(err error, tags map[string]string, interfaces ...Interface) st
 	return DefaultClient.CaptureError(err, tags, interfaces...)
 }
 
+// CaptureErrorWithFingerprint is identical to CaptureError except it includes specified fingerprint in the packet.
+func (client *Client) CaptureErrorWithFingerprint(err error, tags map[string]string, fingerprint []string, interfaces ...Interface) string {
+	eventID, _ := client.doCaptureError(err, tags, fingerprint, interfaces...)
+	return eventID
+}
+
+// CaptureErrorWithFingerprint is identical to CaptureError except it includes specified fingerprint in the packet.
+func CaptureErrorWithFingerprint(err error, tags map[string]string, fingerprint []string, interfaces ...Interface) string {
+	return DefaultClient.CaptureErrorWithFingerprint(err, tags, fingerprint, interfaces...)
+}
+
 // CaptureErrorAndWait is identical to CaptureError, except it blocks and assures that the event was sent
 func (client *Client) CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interface) string {
-	if client == nil {
-		return ""
-	}
-
-	if client.shouldExcludeErr(err.Error()) {
-		return ""
-	}
-
-	extra := extractExtra(err)
-	cause := Cause(err)
-
-	packet := NewPacketWithExtra(err.Error(), extra, append(append(interfaces, client.context.interfaces()...), NewException(cause, GetOrNewStacktrace(cause, 1, 3, client.includePaths)))...)
-	eventID, ch := client.Capture(packet, tags)
+	eventID, ch := client.doCaptureError(err, tags, []string{}, interfaces...)
 	if eventID != "" {
 		<-ch
 	}
@@ -794,9 +833,22 @@ func CaptureErrorAndWait(err error, tags map[string]string, interfaces ...Interf
 	return DefaultClient.CaptureErrorAndWait(err, tags, interfaces...)
 }
 
-// CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
-// If an error is captured, both the error and the reported Sentry error ID are returned.
-func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
+// CaptureErrorWithFingerprint is identical to CaptureErrorAndWait except it includes specified fingerprint in the packet.
+func (client *Client) CaptureErrorWithFingerprintAndWait(err error, tags map[string]string, fingerprint []string, interfaces ...Interface) string {
+	eventID, ch := client.doCaptureError(err, tags, fingerprint, interfaces...)
+	if eventID != "" {
+		<-ch
+	}
+
+	return eventID
+}
+
+// CaptureErrorWithFingerprint is identical to CaptureErrorAndWait except it includes specified fingerprint in the packet.
+func CaptureErrorWithFingerprintAndWait(err error, tags map[string]string, fingerprint []string, interfaces ...Interface) string {
+	return DefaultClient.CaptureErrorWithFingerprintAndWait(err, tags, fingerprint, interfaces...)
+}
+
+func (client *Client) doCapturePanic(f func(), tags map[string]string, fingerprint []string, interfaces ...Interface) (err interface{}, errorID string, ch chan error) {
 	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
 	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
 	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
@@ -820,11 +872,18 @@ func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces 
 			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
 		}
 
-		errorID, _ = client.Capture(packet, tags)
+		errorID, ch = client.CaptureWithFingerprint(packet, tags, fingerprint)
 	}()
 
 	f()
 	return
+}
+
+// CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
+// If an error is captured, both the error and the reported Sentry error ID are returned.
+func (client *Client) CapturePanic(f func(), tags map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
+	err, eventID, _ := client.doCapturePanic(f, tags, []string{}, interfaces...)
+	return err, eventID
 }
 
 // CapturePanic calls f and then recovers and reports a panic to the Sentry server if it occurs.
@@ -833,45 +892,45 @@ func CapturePanic(f func(), tags map[string]string, interfaces ...Interface) (in
 	return DefaultClient.CapturePanic(f, tags, interfaces...)
 }
 
+// CapturePanicWithFingerprint is identical to CapturePanic except it includes specified fingerprint in the packet.
+func (client *Client) CapturePanicWithFingerprint(f func(), tags map[string]string, fingerprint []string, interfaces ...Interface) (err interface{}, errorID string) {
+	err, eventID, _ := client.doCapturePanic(f, tags, fingerprint, interfaces...)
+	return err, eventID
+}
+
+// CapturePanicWithFingerprint is identical to CapturePanic except it includes specified fingerprint in the packet.
+func CapturePanicWithFingerprint(f func(), tags map[string]string, fingerprint []string, interfaces ...Interface) (interface{}, string) {
+	return DefaultClient.CapturePanicWithFingerprint(f, tags, fingerprint, interfaces...)
+}
+
 // CapturePanicAndWait is identical to CapturePanic, except it blocks and assures that the event was sent
 func (client *Client) CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (err interface{}, errorID string) {
-	// Note: This doesn't need to check for client, because we still want to go through the defer/recover path
-	// Down the line, Capture will be noop'd, so while this does a _tiny_ bit of overhead constructing the
-	// *Packet just to be thrown away, this should not be the normal case. Could be refactored to
-	// be completely noop though if we cared.
-	defer func() {
-		var packet *Packet
-		err = recover()
-		switch rval := err.(type) {
-		case nil:
-			return
-		case error:
-			if client.shouldExcludeErr(rval.Error()) {
-				return
-			}
-			packet = NewPacket(rval.Error(), append(append(interfaces, client.context.interfaces()...), NewException(rval, NewStacktrace(2, 3, client.includePaths)))...)
-		default:
-			rvalStr := fmt.Sprint(rval)
-			if client.shouldExcludeErr(rvalStr) {
-				return
-			}
-			packet = NewPacket(rvalStr, append(append(interfaces, client.context.interfaces()...), NewException(errors.New(rvalStr), NewStacktrace(2, 3, client.includePaths)))...)
-		}
+	err, eventID, ch := client.doCapturePanic(f, tags, []string{}, interfaces...)
+	if errorID != "" {
+		<-ch
+	}
 
-		var ch chan error
-		errorID, ch = client.Capture(packet, tags)
-		if errorID != "" {
-			<-ch
-		}
-	}()
-
-	f()
-	return
+	return err, eventID
 }
 
 // CapturePanicAndWait is identical to CapturePanic, except it blocks and assures that the event was sent
 func CapturePanicAndWait(f func(), tags map[string]string, interfaces ...Interface) (interface{}, string) {
 	return DefaultClient.CapturePanicAndWait(f, tags, interfaces...)
+}
+
+// CapturePanicWithFingerprintAndWait is identical to CapturePanicAndWait except it includes specified fingerprint in the packet.
+func (client *Client) CapturePanicWithFingerprintAndWait(f func(), tags map[string]string, fingerprint []string, interfaces ...Interface) (err interface{}, errorID string) {
+	err, eventID, ch := client.doCapturePanic(f, tags, fingerprint, interfaces...)
+	if errorID != "" {
+		<-ch
+	}
+
+	return err, eventID
+}
+
+// CapturePanicWithFingerprintAndWait is identical to CapturePanicAndWait except it includes specified fingerprint in the packet.
+func CapturePanicWithFingerprintAndWait(f func(), tags map[string]string, fingerprint []string, interfaces ...Interface) (interface{}, string) {
+	return DefaultClient.CapturePanicWithFingerprintAndWait(f, tags, fingerprint, interfaces...)
 }
 
 // Close given clients event queue
