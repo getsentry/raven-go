@@ -227,7 +227,7 @@ func (packet *Packet) Init(project string) error {
 	}
 	if packet.EventID == "" {
 		var err error
-		packet.EventID, err = uuid()
+		packet.EventID, err = createUUID()
 		if err != nil {
 			return err
 		}
@@ -269,7 +269,7 @@ func (packet *Packet) AddTags(tags map[string]string) {
 	}
 }
 
-func uuid() (string, error) {
+func createUUID() (string, error) {
 	id := make([]byte, 16)
 	_, err := io.ReadFull(rand.Reader, id)
 	if err != nil {
